@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller 打包配置文件
-# 图片批量转换工具
+# 图片转换工具
 
 import os
 import sys
@@ -106,5 +106,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='assets/img/logo.ico',
 )

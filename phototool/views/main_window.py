@@ -1,9 +1,10 @@
 """
-图片批量转换工具 - PyQt5 主窗口
+图片转换工具 - PyQt5 主窗口
 主界面布局与交互逻辑
 """
 
 import sys
+from io import BytesIO
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -25,6 +26,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.files = []
+        self.icon_files = []
         self.thread = None
         # 变换状态
         self._flip_h = False
@@ -32,6 +34,9 @@ class MainWindow(QMainWindow):
         self._rotation_angle = 0
         self._original_pixmap = None
         self._original_pixmap_backup = None
+        # 尺寸调整状态
+        self._updating_width = False
+        self._updating_height = False
         # 裁剪状态
         self._crop_enabled = False
         self._crop_rect = None
@@ -43,7 +48,7 @@ class MainWindow(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("图片批量转换工具")
+        self.setWindowTitle("图片转换工具")
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)
 
@@ -771,6 +776,10 @@ class MainWindow(QMainWindow):
         self.keep_ratio_checkbox = QCheckBox("保持宽高比")
         self.keep_ratio_checkbox.setChecked(True)
         resize_layout.addWidget(self.keep_ratio_checkbox, 3, 0, 1, 2)
+        
+        # 连接信号以实现互斥逻辑
+        self.resize_checkbox.clicked.connect(lambda: self._ensure_mutual_exclusion(self.resize_checkbox))
+        self.keep_ratio_checkbox.clicked.connect(lambda: self._ensure_mutual_exclusion(self.keep_ratio_checkbox))
         resize_group.setContentWidget(resize_content)
         resize_group.setExpanded(True)
         layout.addWidget(resize_group)
@@ -963,16 +972,78 @@ class MainWindow(QMainWindow):
         fmt_layout.addWidget(self.icon_format_combo)
         layout.addWidget(fmt_group)
 
-        preview_group = QGroupBox("生成预览")
-        preview_layout = QVBoxLayout(preview_group)
-        preview_layout.setContentsMargins(10, 25, 10, 8)
+        # 圆角设置
+        corner_group = QGroupBox("圆角设置")
+        corner_layout = QVBoxLayout(corner_group)
+        corner_layout.setContentsMargins(10, 25, 10, 8)
+        corner_layout.setSpacing(10)
+
+        # 启用圆角复选框
+        self.icon_corner_enabled = QCheckBox("启用圆角")
+        self.icon_corner_enabled.setChecked(False)
+        corner_layout.addWidget(self.icon_corner_enabled)
+
+        # 圆角形状选择
+        shape_widget = QWidget()
+        shape_layout = QHBoxLayout(shape_widget)
+        shape_layout.setContentsMargins(0, 0, 0, 0)
+        shape_layout.setSpacing(10)
+        shape_layout.addWidget(QLabel("形状:"))
+
+        self.icon_corner_shape_combo = QComboBox()
+        self.icon_corner_shape_combo.addItems(["圆角矩形", "圆形"])
+        self.icon_corner_shape_combo.setEnabled(False)
+        self.icon_corner_shape_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        shape_layout.addWidget(self.icon_corner_shape_combo, 1)
+        corner_layout.addWidget(shape_widget)
+
+        # 圆角半径设置
+        radius_widget = QWidget()
+        radius_layout = QHBoxLayout(radius_widget)
+        radius_layout.setContentsMargins(0, 0, 0, 0)
+        radius_layout.setSpacing(10)
+        radius_layout.addWidget(QLabel("圆角半径:"))
+
+        self.icon_corner_radius = QSpinBox()
+        self.icon_corner_radius.setRange(1, 200)
+        self.icon_corner_radius.setValue(20)
+        self.icon_corner_radius.setSuffix(" px")
+        self.icon_corner_radius.setEnabled(False)
+        self.icon_corner_radius.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        radius_layout.addWidget(self.icon_corner_radius, 1)
+        corner_layout.addWidget(radius_widget)
+
+        # 圆角效果预览图
+        self.corner_preview_label = QLabel()
+        self.corner_preview_label.setAlignment(Qt.AlignCenter)
+        self.corner_preview_label.setMinimumHeight(80)
+        self.corner_preview_label.setStyleSheet("""
+            QLabel {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background: white;
+            }
+        """)
+        corner_layout.addWidget(self.corner_preview_label)
+
+        # 连接信号
+        self.icon_corner_enabled.stateChanged.connect(self._on_corner_enabled_changed)
+        self.icon_corner_shape_combo.currentIndexChanged.connect(self._update_icon_preview)
+        self.icon_corner_radius.valueChanged.connect(self._update_icon_preview)
+
+        layout.addWidget(corner_group)
+
+        # 尺寸列表
+        sizes_group = QGroupBox("生成尺寸")
+        sizes_layout = QVBoxLayout(sizes_group)
+        sizes_layout.setContentsMargins(10, 25, 10, 8)
         self.icon_preview_list = QListWidget()
         self.icon_preview_list.setMaximumHeight(120)
-        preview_layout.addWidget(self.icon_preview_list)
+        sizes_layout.addWidget(self.icon_preview_list)
         self._update_icon_preview()
         self.icon_preset_combo.currentIndexChanged.connect(self._update_icon_preview)
         self.icon_size_spinbox.valueChanged.connect(self._update_icon_preview)
-        layout.addWidget(preview_group)
+        layout.addWidget(sizes_group)
 
         layout.addStretch()
 
@@ -988,6 +1059,13 @@ class MainWindow(QMainWindow):
             self.custom_sizes_widget.setVisible(True)
         else:
             self.custom_sizes_widget.setVisible(False)
+        self._update_icon_preview()
+
+    def _on_corner_enabled_changed(self, state):
+        """圆角启用/禁用状态变化"""
+        enabled = (state == Qt.Checked)
+        self.icon_corner_shape_combo.setEnabled(enabled)
+        self.icon_corner_radius.setEnabled(enabled)
         self._update_icon_preview()
 
     def _update_icon_preview(self):
@@ -1008,6 +1086,91 @@ class MainWindow(QMainWindow):
             self.icon_preview_list.addItem(f"{size} × {size} px")
         if len(sizes) > 10:
             self.icon_preview_list.addItem(f"... 共 {len(sizes)} 个尺寸")
+
+        # 生成圆角预览图
+        self._update_corner_preview()
+
+    def _update_corner_preview(self):
+        """更新圆角效果预览图"""
+        from PIL import Image as PILImage
+        from PIL import ImageDraw
+
+        corner_enabled = self.icon_corner_enabled.isChecked()
+        corner_shape = 'rounded' if self.icon_corner_shape_combo.currentIndex() == 0 else 'circle'
+        corner_radius = self.icon_corner_radius.value()
+
+        # 获取目标尺寸（与生成图标时保持一致）
+        preset_idx = self.icon_preset_combo.currentIndex()
+        target_sizes = {
+            0: 256, 1: 180, 2: 192, 3: 32, 4: 180, 5: 150, 6: 512, 7: self.icon_size_spinbox.value()
+        }
+        target_size = target_sizes.get(preset_idx, 256)
+
+        # 预览尺寸
+        preview_size = 80
+
+        # 计算预览时的圆角半径（保持与生成时相同的比例）
+        # corner_radius 是基于 target_size 的，现在按比例缩放到 preview_size
+        preview_corner_radius = int(corner_radius * preview_size / target_size)
+
+        # 检查是否有上传的图片
+        if hasattr(self, 'icon_files') and self.icon_files:
+            try:
+                # 加载上传的图片
+                src_img = PILImage.open(self.icon_files[0]).convert('RGBA')
+                src_w, src_h = src_img.size
+
+                # 裁剪为正方形（从中心裁剪）
+                if src_w != src_h:
+                    min_dim = min(src_w, src_h)
+                    left = (src_w - min_dim) // 2
+                    top = (src_h - min_dim) // 2
+                    src_img = src_img.crop((left, top, left + min_dim, top + min_dim))
+
+                # 缩放预览尺寸
+                src_img = src_img.resize((preview_size, preview_size), PILImage.LANCZOS)
+
+                # 应用圆角遮罩（使用按比例缩放后的圆角半径）
+                if corner_enabled:
+                    src_img = ImageConverter._apply_mask_shape(src_img, corner_shape, preview_corner_radius)
+
+                # 将 PIL 图像转换为 QPixmap
+                buffer = BytesIO()
+                src_img.save(buffer, format='PNG')
+                buffer.seek(0)
+
+                from PyQt5.QtGui import QPixmap
+                pixmap = QPixmap()
+                pixmap.loadFromData(buffer.getvalue())
+                self.corner_preview_label.setPixmap(pixmap)
+                return
+            except Exception:
+                pass
+
+        # 无图片时显示占位符
+        placeholder_img = PILImage.new('RGBA', (preview_size, preview_size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(placeholder_img)
+
+        if corner_enabled:
+            if corner_shape == 'circle':
+                draw.ellipse((0, 0, preview_size - 1, preview_size - 1), fill=(180, 180, 180, 255))
+            else:
+                r = min(preview_corner_radius, preview_size // 2)
+                draw.rounded_rectangle((0, 0, preview_size - 1, preview_size - 1), radius=r, fill=(180, 180, 180, 255))
+        else:
+            draw.rectangle((0, 0, preview_size - 1, preview_size - 1), fill=(180, 180, 180, 255))
+
+        # 添加问号图标示意
+        draw.text((preview_size // 2 - 6, preview_size // 2 - 8), "?", fill=(100, 100, 100, 255))
+
+        buffer = BytesIO()
+        placeholder_img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        from PyQt5.QtGui import QPixmap
+        pixmap = QPixmap()
+        pixmap.loadFromData(buffer.getvalue())
+        self.corner_preview_label.setPixmap(pixmap)
 
     def _create_bottom_bar(self):
         self.status_bar = QStatusBar()
@@ -1105,6 +1268,9 @@ class MainWindow(QMainWindow):
             self.icon_preview_size_label.setText("")
             self.icon_file_name_label.setText("未选择图片")
 
+        # 更新圆角预览
+        self._update_corner_preview()
+
     def handle_file_dropped(self, file_path):
         self.files = [file_path]
         self.update_preview()
@@ -1144,6 +1310,37 @@ class MainWindow(QMainWindow):
             return
         self._flip_v = not self._flip_v
         self._update_transform_preview()
+
+    def _on_width_changed(self, value: int, by_user: bool = True):
+        """宽度变化时，同步高度（如果保持宽高比）"""
+        if getattr(self, '_updating_height', False):
+            return
+        if by_user and self.keep_ratio_checkbox.isChecked() and self._original_pixmap:
+            ratio = self._original_pixmap.height() / self._original_pixmap.width()
+            new_height = int(value * ratio)
+            self._updating_height = True
+            self.height_spinbox.setValue(new_height)
+            self._updating_height = False
+
+    def _on_height_changed(self, value: int, by_user: bool = True):
+        """高度变化时，同步宽度（如果保持宽高比）"""
+        if getattr(self, '_updating_width', False):
+            return
+        if by_user and self.keep_ratio_checkbox.isChecked() and self._original_pixmap:
+            ratio = self._original_pixmap.width() / self._original_pixmap.height()
+            new_width = int(value * ratio)
+            self._updating_width = True
+            self.width_spinbox.setValue(new_width)
+            self._updating_width = False
+
+    def _ensure_mutual_exclusion(self, selected):
+        """确保两个复选框互斥，只能选择一个"""
+        if selected == self.resize_checkbox:
+            if self.resize_checkbox.isChecked():
+                self.keep_ratio_checkbox.setChecked(False)
+        elif selected == self.keep_ratio_checkbox:
+            if self.keep_ratio_checkbox.isChecked():
+                self.resize_checkbox.setChecked(False)
 
     def rotate_left_90(self):
         if self._original_pixmap is None or self._original_pixmap.isNull():
@@ -1344,15 +1541,35 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.status_label.setText("正在生成图标...")
 
+        # 获取圆角设置
+        corner_enabled = self.icon_corner_enabled.isChecked()
+        corner_shape = 'rounded' if self.icon_corner_shape_combo.currentIndex() == 0 else 'circle'
+        corner_radius = self.icon_corner_radius.value()
+
         output_path = Path(save_path)
         try:
             with ImageConverter(file_path) as converter:
-                result_file = converter.generate_icon(output_path, size=size, output_format=output_format)
+                # 根据是否启用圆角选择遮罩形状
+                mask_shape = corner_shape if corner_enabled else 'none'
+                result_file = converter.generate_icon(
+                    output_path,
+                    size=size,
+                    output_format=output_format,
+                    mask_shape=mask_shape,
+                    corner_radius=corner_radius
+                )
             self.progress_bar.setValue(100)
             self.status_label.setText("图标生成完成")
+
+            # 构建提示信息
+            corner_info = ""
+            if corner_enabled:
+                shape_name = "圆角矩形" if corner_shape == 'rounded' else "圆形"
+                corner_info = f"\n圆角: {shape_name} (半径 {corner_radius}px)"
+
             QMessageBox.information(
                 self, "完成",
-                f"图标生成完成！\n尺寸: {size}×{size} px\n格式: {output_format}\n\n保存至: {result_file}")
+                f"图标生成完成！\n尺寸: {size}×{size} px\n格式: {output_format}{corner_info}\n\n保存至: {result_file}")
         except Exception as e:
             self.status_label.setText("生成失败")
             QMessageBox.critical(self, "错误", f"生成图标时出错:\n{str(e)}")
