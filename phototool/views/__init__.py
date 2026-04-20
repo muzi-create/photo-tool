@@ -1,5 +1,6 @@
 """视图模块"""
 
 from .main_window import MainWindow
+from .splash_screen import SplashScreen
 
-__all__ = ["MainWindow"]
+__all__ = ["MainWindow", "SplashScreen"]
