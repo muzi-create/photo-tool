@@ -3,10 +3,10 @@ ImageConverter - 图片格式转换、质量压缩和尺寸缩放工具类
 使用 Pillow (PIL) 库实现
 """
 
-from PIL import Image
 from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict
-from functools import lru_cache
+
+from PIL import Image
 
 
 class ImageConverter:
@@ -22,7 +22,7 @@ class ImageConverter:
 
     # 企业级图标尺寸预设
     ICON_PRESETS = {
-        'windows': [16, 32, 48, 256],           # Windows 系统图标
+        'windows': [16, 32, 48, 256],  # Windows 系统图标
         'ios': [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024],  # iOS 应用图标
         'android': [36, 48, 72, 96, 144, 192, 512],  # Android 应用图标
         'favicon': [16, 32, 48, 64, 128, 180, 192, 256],  # 网站 favicon
@@ -39,8 +39,8 @@ class ImageConverter:
 
     # 分级锐化策略（根据尺寸动态调整强度）
     SHARPEN_LEVELS = {
-        16: {'radius': 0.3, 'percent': 200, 'threshold': 2},   # 极小图标，强锐化
-        24: {'radius': 0.4, 'percent': 175, 'threshold': 2},   # 小图标，中强锐化
+        16: {'radius': 0.3, 'percent': 200, 'threshold': 2},  # 极小图标，强锐化
+        24: {'radius': 0.4, 'percent': 175, 'threshold': 2},  # 小图标，中强锐化
         32: {'radius': 0.5, 'percent': 150, 'threshold': 2},  # 标准小图标
     }
 
@@ -131,10 +131,10 @@ class ImageConverter:
 
     @staticmethod
     def _get_output_path(
-        original_path: Path,
-        suffix: str,
-        output_dir: Optional[Path] = None,
-        new_ext: Optional[str] = None
+            original_path: Path,
+            suffix: str,
+            output_dir: Optional[Path] = None,
+            new_ext: Optional[str] = None
     ) -> Path:
         """
         生成输出文件路径
@@ -160,11 +160,11 @@ class ImageConverter:
         return original_path.parent / f"{stem}{ext}"
 
     def convert_format(
-        self,
-        output_format: str,
-        output_path: Optional[Union[str, Path]] = None,
-        quality: Optional[int] = None,
-        preserve_transparency: bool = False
+            self,
+            output_format: str,
+            output_path: Optional[Union[str, Path]] = None,
+            quality: Optional[int] = None,
+            preserve_transparency: bool = False
     ) -> Path:
         """
         转换图片格式
@@ -211,10 +211,10 @@ class ImageConverter:
         return output_path
 
     def compress(
-        self,
-        output_path: Optional[Union[str, Path]] = None,
-        quality: int = 85,
-        max_size_kb: Optional[int] = None
+            self,
+            output_path: Optional[Union[str, Path]] = None,
+            quality: int = 85,
+            max_size_kb: Optional[int] = None
     ) -> Path:
         """
         压缩图片质量
@@ -241,7 +241,7 @@ class ImageConverter:
 
             while current_quality >= min_quality:
                 image.save(output_path, format=self._get_format_from_ext(output_path.suffix),
-                          quality=current_quality, optimize=True)
+                           quality=current_quality, optimize=True)
                 file_size = output_path.stat().st_size / 1024  # KB
 
                 if file_size <= max_size_kb:
@@ -251,20 +251,20 @@ class ImageConverter:
             else:
                 # 如果达到最小质量仍超过目标大小，使用最小质量保存
                 image.save(output_path, format=self._get_format_from_ext(output_path.suffix),
-                          quality=min_quality, optimize=True)
+                           quality=min_quality, optimize=True)
         else:
             image.save(output_path, format=self._get_format_from_ext(output_path.suffix),
-                      quality=quality, optimize=True)
+                       quality=quality, optimize=True)
 
         return output_path
 
     def resize(
-        self,
-        size: Tuple[int, int],
-        output_path: Optional[Union[str, Path]] = None,
-        quality: int = 85,
-        keep_aspect_ratio: bool = False,
-        resample: Optional[str] = None
+            self,
+            size: Tuple[int, int],
+            output_path: Optional[Union[str, Path]] = None,
+            quality: int = 85,
+            keep_aspect_ratio: bool = False,
+            resample: Optional[str] = None
     ) -> Path:
         """
         调整图片尺寸
@@ -319,10 +319,10 @@ class ImageConverter:
         return output_path
 
     def thumbnail(
-        self,
-        max_size: Tuple[int, int],
-        output_path: Optional[Union[str, Path]] = None,
-        quality: int = 85
+            self,
+            max_size: Tuple[int, int],
+            output_path: Optional[Union[str, Path]] = None,
+            quality: int = 85
     ) -> Path:
         """
         生成缩略图（保持宽高比，不变形）
@@ -482,10 +482,10 @@ class ImageConverter:
         return sharpened
 
     def _smart_background_adapt(
-        self,
-        image: Image.Image,
-        force_transparent: bool = True,
-        target_bg_color: Optional[Tuple[int, int, int]] = None
+            self,
+            image: Image.Image,
+            force_transparent: bool = True,
+            target_bg_color: Optional[Tuple[int, int, int]] = None
     ) -> Image.Image:
         """
         智能背景适配：根据原图特性和目标背景色决定保留透明底还是合成纯色底
@@ -532,9 +532,9 @@ class ImageConverter:
 
     @staticmethod
     def _apply_mask_shape(
-        image: Image.Image,
-        mask_shape: str = 'none',
-        corner_radius: int = 20
+            image: Image.Image,
+            mask_shape: str = 'none',
+            corner_radius: int = 20
     ) -> Image.Image:
         """
         应用现代图标遮罩形状（圆形、圆角矩形等）
@@ -596,13 +596,14 @@ class ImageConverter:
                     else:
                         # 检查四个角
                         in_top_left = (x < r and y < r and
-                            (x - r) * (x - r) + (y - r) * (y - r) <= r * r)
+                                       (x - r) * (x - r) + (y - r) * (y - r) <= r * r)
                         in_top_right = (x >= width - r and y < r and
-                            (x - (width - r - 1)) * (x - (width - r - 1)) + (y - r) * (y - r) <= r * r)
+                                        (x - (width - r - 1)) * (x - (width - r - 1)) + (y - r) * (y - r) <= r * r)
                         in_bottom_left = (x < r and y >= height - r and
-                            (x - r) * (x - r) + (y - (height - r - 1)) * (y - (height - r - 1)) <= r * r)
+                                          (x - r) * (x - r) + (y - (height - r - 1)) * (y - (height - r - 1)) <= r * r)
                         in_bottom_right = (x >= width - r and y >= height - r and
-                            (x - (width - r - 1)) * (x - (width - r - 1)) + (y - (height - r - 1)) * (y - (height - r - 1)) <= r * r)
+                                           (x - (width - r - 1)) * (x - (width - r - 1)) + (y - (height - r - 1)) * (
+                                                       y - (height - r - 1)) <= r * r)
 
                         inside = in_top_left or in_top_right or in_bottom_left or in_bottom_right
 
@@ -615,9 +616,9 @@ class ImageConverter:
         return image
 
     def _get_smart_ico_sizes(
-        self,
-        size_list: List[int],
-        max_upscale_ratio: float = 2.0
+            self,
+            size_list: List[int],
+            max_upscale_ratio: float = 2.0
     ) -> List[int]:
         """
         智能过滤 ICO 尺寸列表，防止对过小的原图进行无意义的放大
@@ -647,13 +648,13 @@ class ImageConverter:
         return sorted(set(filtered))
 
     def _prepare_icon_image(
-        self,
-        target_size: int,
-        preserve_transparency: bool = True,
-        apply_sharpen: bool = True,
-        mask_shape: str = 'none',
-        target_bg_color: Optional[Tuple[int, int, int]] = None,
-        corner_radius: int = 20
+            self,
+            target_size: int,
+            preserve_transparency: bool = True,
+            apply_sharpen: bool = True,
+            mask_shape: str = 'none',
+            target_bg_color: Optional[Tuple[int, int, int]] = None,
+            corner_radius: int = 20
     ) -> Image.Image:
         """
         准备图标尺寸的图片（精确缩放到目标尺寸）
@@ -726,14 +727,14 @@ class ImageConverter:
         return image
 
     def generate_icon(
-        self,
-        output_path: Union[str, Path],
-        size: int,
-        output_format: str = 'PNG',
-        preserve_transparency: bool = True,
-        mask_shape: str = 'none',
-        target_bg_color: Optional[Tuple[int, int, int]] = None,
-        corner_radius: int = 20
+            self,
+            output_path: Union[str, Path],
+            size: int,
+            output_format: str = 'PNG',
+            preserve_transparency: bool = True,
+            mask_shape: str = 'none',
+            target_bg_color: Optional[Tuple[int, int, int]] = None,
+            corner_radius: int = 20
     ) -> Path:
         """
         生成指定尺寸的高质量图标文件
@@ -787,11 +788,11 @@ class ImageConverter:
         return output_path
 
     def generate_app_icons(
-        self,
-        output_dir: Union[str, Path],
-        preset: str = 'ios',
-        include_android: bool = False,
-        high_res: bool = False
+            self,
+            output_dir: Union[str, Path],
+            preset: str = 'ios',
+            include_android: bool = False,
+            high_res: bool = False
     ) -> Dict[str, List[Path]]:
         """
         生成多平台应用图标集
@@ -885,9 +886,9 @@ class ImageConverter:
         return results
 
     def generate_favicon_package(
-        self,
-        output_dir: Union[str, Path],
-        high_res: bool = False
+            self,
+            output_dir: Union[str, Path],
+            high_res: bool = False
     ) -> Dict[str, Path]:
         """
         生成完整的网站 favicon 包
@@ -968,10 +969,10 @@ class ImageConverter:
         return results
 
     def resize_to_square(
-        self,
-        size: int,
-        output_path: Optional[Union[str, Path]] = None,
-        background_color: Optional[Tuple[int, int, int, int]] = (0, 0, 0, 0)
+            self,
+            size: int,
+            output_path: Optional[Union[str, Path]] = None,
+            background_color: Optional[Tuple[int, int, int, int]] = (0, 0, 0, 0)
     ) -> Path:
         """
         将图片调整为正方形（居中，保留透明）
