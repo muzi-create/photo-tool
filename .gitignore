@@ -7,13 +7,18 @@ __pycache__/
 dist/
 build/
 *.egg
+.web/
+.states/
+.spec/
+src-tauri/target/
+node_modules/
 
-# 虚拟环境
+# Virtual environments
 myenv/
 venv/
 .env/
 
-# IDE
+# Editors
 .idea/
 .vscode/
 *.swp
@@ -24,10 +29,10 @@ venv/
 *.manifest
 *.spec.bak
 
-# OS
+# Operating systems
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# 日志
+# Logs
 *.log

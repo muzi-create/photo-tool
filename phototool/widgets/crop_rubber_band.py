@@ -129,6 +129,7 @@ class CropRubberBand(QWidget):
 
     def _get_resize_cursor(self, mode):
         cursors = {
+            self.MODE_MOVE: Qt.SizeAllCursor,
             self.MODE_RESIZE_TL: Qt.SizeFDiagCursor,
             self.MODE_RESIZE_BR: Qt.SizeFDiagCursor,
             self.MODE_RESIZE_TR: Qt.SizeBDiagCursor,

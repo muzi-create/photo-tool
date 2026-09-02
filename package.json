@@ -1,0 +1,12 @@
+{
+  "name": "phototool-desktop",
+  "private": true,
+  "scripts": {
+    "web:compile": "python -m reflex compile",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "powershell -ExecutionPolicy Bypass -File .\\build_tauri.ps1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
+}

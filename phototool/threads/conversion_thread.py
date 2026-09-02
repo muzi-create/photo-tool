@@ -1,12 +1,8 @@
-"""
-图片格式转换工作线程
-在后台线程中执行批量图片转换操作
-"""
+"""Qt adapter for batch image conversion."""
 
 from pathlib import Path
 from PyQt5.QtCore import QThread, pyqtSignal
-from PIL import Image
-from phototool.core.image_converter import ImageConverter
+from phototool.core.conversion import ConversionOptions, ImageConversionService
 
 
 class ConversionThread(QThread):
@@ -15,89 +11,56 @@ class ConversionThread(QThread):
     progress_updated = pyqtSignal(int, str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, files, output_format, quality, output_dir, resize_opts, rotate_opts,
-                 single_filename=None, crop_opts=None):
-        super().__init__()
-        self.files = files
-        self.output_format = output_format
-        self.quality = quality
-        self.output_dir = output_dir
-        self.resize_opts = resize_opts
-        self.rotate_opts = rotate_opts
+    def __init__(self, files, output_dir, options, single_filename=None, parent=None):
+        super().__init__(parent)
+        self.files = tuple(files)
+        self.output_dir = Path(output_dir)
+        self.options = options
         self.single_filename = single_filename
-        self.crop_opts = crop_opts  # {'enabled': bool, 'rect': (x1, y1, x2, y2)}
         self._running = True
 
+        if not isinstance(options, ConversionOptions):
+            raise TypeError("options 必须是 ConversionOptions")
+
     def run(self):
-        success = fail = 0
-        for i, f in enumerate(self.files):
-            if not self._running: break
+        success_count = 0
+        failure_count = 0
+        errors = []
+        total = len(self.files)
+        if total == 0:
+            self.finished.emit(False, "没有要处理的文件")
+            return
+
+        for index, source_path in enumerate(self.files):
+            if not self._running:
+                self.finished.emit(False, "任务已取消")
+                return
             try:
-                self.progress_updated.emit(int((i + 1) / len(self.files) * 100), Path(f).name)
-                with ImageConverter(f) as converter:
-                    ext = '.jpg' if self.output_format == 'JPEG' else f'.{self.output_format.lower()}'
-                    if self.single_filename:
-                        out_path = Path(self.output_dir) / self.single_filename
-                    else:
-                        out_path = Path(self.output_dir) / f"{Path(f).stem}{ext}"
+                self.progress_updated.emit(
+                    int((index + 1) / total * 100), Path(source_path).name
+                )
+                output_path = self._output_path(source_path)
+                ImageConversionService.convert_file(
+                    source_path, output_path, self.options
+                )
+                success_count += 1
+            except Exception as exc:
+                failure_count += 1
+                errors.append(f"{Path(source_path).name}: {exc}")
 
-                    image = converter.image.copy()
-                    orig_w, orig_h = image.size
+        succeeded = failure_count == 0
+        message = f"完成! 成功: {success_count}, 失败: {failure_count}"
+        if errors:
+            message += f"\n首个错误: {errors[0]}"
+        self.finished.emit(succeeded, message)
 
-                    # 应用裁剪
-                    if self.crop_opts and self.crop_opts.get('enabled'):
-                        crop_ratios = self.crop_opts.get('rect')
-                        if crop_ratios:
-                            x1_ratio, y1_ratio, x2_ratio, y2_ratio = crop_ratios
-                            x1 = max(0, int(x1_ratio * orig_w))
-                            y1 = max(0, int(y1_ratio * orig_h))
-                            x2 = min(orig_w, int(x2_ratio * orig_w))
-                            y2 = min(orig_h, int(y2_ratio * orig_h))
-                            if x2 > x1 and y2 > y1:
-                                image = image.crop((x1, y1, x2, y2))
-
-                    # 应用旋转/翻转
-                    if self.rotate_opts['flip_h']:
-                        image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-                    if self.rotate_opts['flip_v']:
-                        image = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
-                    if self.rotate_opts['angle'] != 0:
-                        image = image.rotate(-self.rotate_opts['angle'], expand=True, resample=Image.Resampling.BICUBIC)
-
-                    # 尺寸调整
-                    if self.resize_opts['enabled']:
-                        ratio_w = self.resize_opts['width'] / image.width
-                        ratio_h = self.resize_opts['height'] / image.height
-                        if self.resize_opts['keep_ratio']:
-                            ratio = min(ratio_w, ratio_h)
-                            new_size = (int(image.width * ratio), int(image.height * ratio))
-                        else:
-                            new_size = (self.resize_opts['width'], self.resize_opts['height'])
-                        image = image.resize(new_size, Image.Resampling.LANCZOS)
-
-                    # 格式处理
-                    if image.mode in ('RGBA', 'P'):
-                        if self.output_format == 'JPEG':
-                            bg = Image.new('RGB', image.size, (255, 255, 255))
-                            if image.mode == 'RGBA':
-                                bg.paste(image, mask=image.split()[3])
-                            else:
-                                bg.paste(image)
-                            image = bg
-                        elif self.output_format != 'PNG' and self.output_format != 'WEBP':
-                            image = image.convert('RGB')
-                    elif image.mode == 'P':
-                        image = image.convert('RGB')
-
-                    save_kwargs = {'quality': self.quality} if self.output_format != 'PNG' else {}
-                    if self.output_format == 'PNG':
-                        save_kwargs['optimize'] = True
-                    image.save(out_path, format=self.output_format, **save_kwargs)
-
-                success += 1
-            except Exception:
-                fail += 1
-        self.finished.emit(True, f"完成! 成功: {success}, 失败: {fail}")
+    def _output_path(self, source_path):
+        if self.single_filename:
+            return self.output_dir / self.single_filename
+        extension = ImageConversionService.output_extension(
+            self.options.output_format
+        )
+        return self.output_dir / f"{Path(source_path).stem}{extension}"
 
     def stop(self):
         self._running = False

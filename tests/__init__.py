@@ -1,0 +1,1 @@
+"""PhotoTool test suite."""

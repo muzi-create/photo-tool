@@ -1,110 +1,51 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller 打包配置文件
-# 图片转换工具
+"""PyInstaller configuration for the native Windows desktop build."""
 
-import os
-import sys
 from pathlib import Path
 
-block_cipher = None
+from PyInstaller.building.build_main import Analysis, EXE, PYZ, COLLECT
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-# 项目根目录
+
 project_root = Path(SPECPATH)
+reflex_datas, reflex_binaries, reflex_hidden = collect_all("reflex")
+webview_datas, webview_binaries, webview_hidden = collect_all("webview")
+uvicorn_datas, uvicorn_binaries, uvicorn_hidden = collect_all("uvicorn")
+
+datas = [
+    (str(project_root / "assets"), "assets"),
+    (str(project_root / ".web"), ".web"),
+    (str(project_root / "rxconfig.py"), "."),
+    *reflex_datas,
+    *webview_datas,
+    *uvicorn_datas,
+]
+
+hiddenimports = sorted(set(
+    reflex_hidden + webview_hidden + uvicorn_hidden + collect_submodules("phototool") + [
+        "phototool.phototool", "phototool.web_state", "phototool.desktop_server",
+        "phototool.desktop_launcher", "uvicorn.loops.auto",
+        "uvicorn.protocols.http.h11_impl", "uvicorn.protocols.websockets.websockets_impl",
+    ]
+))
 
 a = Analysis(
-    ['main.py'],                              # 入口文件
-    pathex=[str(project_root)],               # 搜索路径
-    binaries=[],
-    datas=[
-        # 资源文件：打包时将 assets/ 目录复制到输出根目录的 assets/ 下
-        (os.path.join('assets', 'img'), os.path.join('assets', 'img')),
-    ],
-    hiddenimports=[
-        # phototool 主包及所有子模块
-        'phototool',
-        'phototool.utils',
-        'phototool.utils.paths',
-        'phototool.core',
-        'phototool.core.image_converter',
-        'phototool.ui',
-        'phototool.ui.styles',
-        'phototool.widgets',
-        'phototool.widgets.svg_toggle_btn',
-        'phototool.widgets.collapsible_group',
-        'phototool.widgets.crop_rubber_band',
-        'phototool.widgets.drop_area',
-        'phototool.views',
-        'phototool.views.main_window',
-        'phototool.threads',
-        'phototool.threads.conversion_thread',
-        'phototool.threads.image_worker',
-        'phototool.threads.image_compress_worker',
-        # 第三方库
-        'PyQt5',
-        'PyQt5.QtSvg',
-        'PIL',
-        'PIL._imaging',
-        'PIL.Image',
-        'PIL.PngImagePlugin',
-        'PIL.JpegImagePlugin',
-        'PIL.WebPImagePlugin',
-        'PIL.BmpImagePlugin',
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[
-        # 排除不需要的大型模块，减小打包体积
-        'tkinter',
-        'test',
-        'unittest',
-        'distutils',
-        'sysconfig',
-        'setuptools',
-        'pip',
-        'email',
-        'html',
-        'xmlrpc',
-        'pydoc',
-        'doctest',
-        'argparse',
-        'difflib',
-        'inspect',
-        'asyncio',
-        'concurrent',
-        'multiprocessing',
-    ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    [str(project_root / "main.py")],
+    pathex=[str(project_root)],
+    binaries=reflex_binaries + webview_binaries + uvicorn_binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[], hooksconfig={}, runtime_hooks=[],
+    excludes=["PyQt5", "tkinter", "test", "unittest", "distutils", "setuptools", "pip"],
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
+pyz = PYZ(a.pure, a.zipped_data)
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='PhotoTool',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[
-        'vcruntime140.dll',
-        'python3.dll',
-        'python310.dll',
-    ],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='assets/img/logo.ico',
+    pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
+    name="PhotoTool", debug=False, bootloader_ignore_signals=False,
+    strip=False, upx=False, console=False, disable_windowed_traceback=False,
+    icon=str(project_root / "assets" / "img" / "logo.ico"),
 )
+
+coll = COLLECT(exe, a.binaries, a.zipfiles, a.datas, strip=False, upx=False, name="PhotoTool")

@@ -787,6 +787,40 @@ class ImageConverter:
 
         return output_path
 
+    def generate_multi_size_ico(
+            self,
+            output_path: Union[str, Path],
+            sizes: List[int],
+            preserve_transparency: bool = True,
+            mask_shape: str = 'none',
+            target_bg_color: Optional[Tuple[int, int, int]] = None,
+            corner_radius: int = 20
+    ) -> Path:
+        """Generate one ICO containing all requested Windows-compatible sizes."""
+        normalized_sizes = sorted({int(size) for size in sizes if 1 <= int(size) <= 256})
+        if not normalized_sizes:
+            raise ValueError("ICO 至少需要一个 1 到 256 px 的有效尺寸")
+
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        largest_size = normalized_sizes[-1]
+        image = self._prepare_icon_image(
+            largest_size,
+            preserve_transparency=preserve_transparency,
+            apply_sharpen=True,
+            mask_shape=mask_shape,
+            target_bg_color=target_bg_color,
+            corner_radius=corner_radius,
+        )
+        image.save(
+            output_path,
+            format='ICO',
+            sizes=[(size, size) for size in normalized_sizes],
+            compress_level=0,
+        )
+        image.close()
+        return output_path
+
     def generate_app_icons(
             self,
             output_dir: Union[str, Path],

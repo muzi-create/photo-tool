@@ -3,7 +3,6 @@
 主界面布局与交互逻辑
 """
 
-import sys
 from io import BytesIO
 from pathlib import Path
 from PyQt5.QtWidgets import (
@@ -16,7 +15,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtGui import QFont, QPixmap, QTransform
 
-from phototool.core.image_converter import ImageConverter
+from phototool.core import (
+    ConversionOptions,
+    CropOptions,
+    ImageConverter,
+    ResizeOptions,
+    TransformOptions,
+)
 from phototool.ui.styles import StyleSheet
 from phototool.widgets import CollapsibleGroupBox, CropRubberBand, DropArea
 from phototool.threads.conversion_thread import ConversionThread
@@ -1473,44 +1478,86 @@ class MainWindow(QMainWindow):
         if not self.files:
             QMessageBox.warning(self, "提示", "请先添加文件!")
             return
+
+        destination = self._select_conversion_destination()
+        if destination is None:
+            return
+        output_dir, output_filename = destination
+
+        options = self._build_conversion_options()
+        self._set_conversion_running(True)
+
+        self.thread = ConversionThread(
+            files=self.files,
+            output_dir=output_dir,
+            options=options,
+            single_filename=output_filename,
+            parent=self,
+        )
+        self.thread.progress_updated.connect(self._on_conversion_progress)
+        self.thread.finished.connect(self._on_conversion_finished)
+        self.thread.start()
+
+    def _select_conversion_destination(self):
+        """Ask for an output file or directory based on the batch size."""
         if len(self.files) == 1:
-            ext = '.jpg' if self.format_combo.currentText() == 'JPEG' else f'.{self.format_combo.currentText().lower()}'
+            output_format = self.format_combo.currentText()
+            ext = '.jpg' if output_format == 'JPEG' else f'.{output_format.lower()}'
             default_name = Path(self.files[0]).stem + ext
             save_path, _ = QFileDialog.getSaveFileName(
                 self, "另存为", default_name,
-                f"{self.format_combo.currentText()} Files (*{ext});;All Files (*)")
+                f"{output_format} Files (*{ext});;All Files (*)")
             if not save_path:
-                return
-            output_dir = str(Path(save_path).parent)
-            output_filename = Path(save_path).name
-        else:
-            output_dir = QFileDialog.getExistingDirectory(self, "选择输出文件夹", "", QFileDialog.ShowDirsOnly)
-            if not output_dir:
-                return
-            output_filename = None
+                return None
+            return str(Path(save_path).parent), Path(save_path).name
 
-        self.convert_btn.setEnabled(False)
-        self.progress_bar.setValue(0)
-        self.status_label.setText("正在转换...")
-
-        crop_opts = None
-        if self._crop_enabled and self._crop_rect is not None:
-            crop_opts = {'enabled': True, 'rect': self._crop_rect}
-
-        self.thread = ConversionThread(
-            self.files, self.format_combo.currentText(), self.quality_slider.value(),
-            output_dir,
-            {'enabled': self.resize_checkbox.isChecked(), 'width': self.width_spinbox.value(),
-             'height': self.height_spinbox.value(), 'keep_ratio': self.keep_ratio_checkbox.isChecked()},
-            {'angle': self._rotation_angle, 'flip_h': self._flip_h, 'flip_v': self._flip_v},
-            single_filename=output_filename, crop_opts=crop_opts
+        output_dir = QFileDialog.getExistingDirectory(
+            self, "选择输出文件夹", "", QFileDialog.ShowDirsOnly
         )
-        self.thread.progress_updated.connect(
-            lambda v, n: (self.progress_bar.setValue(v), self.status_label.setText(f"处理: {n}")))
-        self.thread.finished.connect(
-            lambda s, m: (self.progress_bar.setValue(100), self.status_label.setText(m),
-                         self.convert_btn.setEnabled(True), QMessageBox.information(self, "完成", m)))
-        self.thread.start()
+        if not output_dir:
+            return None
+        return output_dir, None
+
+    def _build_conversion_options(self):
+        """Translate widget state into an immutable domain configuration."""
+        crop_rect = None
+        if self._crop_enabled and self._crop_rect is not None:
+            crop_rect = self._crop_rect
+
+        return ConversionOptions(
+            output_format=self.format_combo.currentText(),
+            quality=self.quality_slider.value(),
+            resize=ResizeOptions(
+                enabled=self.resize_checkbox.isChecked(),
+                width=self.width_spinbox.value(),
+                height=self.height_spinbox.value(),
+                keep_aspect_ratio=self.keep_ratio_checkbox.isChecked(),
+            ),
+            transform=TransformOptions(
+                angle=self._rotation_angle,
+                flip_horizontal=self._flip_h,
+                flip_vertical=self._flip_v,
+            ),
+            crop=CropOptions(rect=crop_rect),
+        )
+
+    def _set_conversion_running(self, running):
+        self.convert_btn.setEnabled(not running)
+        self.progress_bar.setValue(0 if running else 100)
+        if running:
+            self.status_label.setText("正在转换...")
+
+    def _on_conversion_progress(self, value, filename):
+        self.progress_bar.setValue(value)
+        self.status_label.setText(f"处理: {filename}")
+
+    def _on_conversion_finished(self, succeeded, message):
+        self._set_conversion_running(False)
+        self.status_label.setText(message)
+        if succeeded:
+            QMessageBox.information(self, "完成", message)
+        else:
+            QMessageBox.warning(self, "转换未完全成功", message)
 
     def generate_icon(self):
         if not hasattr(self, 'icon_files') or not self.icon_files:
