@@ -144,11 +144,20 @@ class ImageConversionService:
             image.close()
             image = transformed
         if options.angle:
-            transformed = image.rotate(
-                -options.angle,
-                expand=True,
-                resample=Image.Resampling.BICUBIC,
-            )
+            quarter_turns = {
+                90: Image.Transpose.ROTATE_270,
+                180: Image.Transpose.ROTATE_180,
+                270: Image.Transpose.ROTATE_90,
+            }
+            transpose = quarter_turns.get(options.angle % 360)
+            if transpose is not None:
+                transformed = image.transpose(transpose)
+            else:
+                transformed = image.rotate(
+                    -options.angle,
+                    expand=True,
+                    resample=Image.Resampling.BICUBIC,
+                )
             image.close()
             image = transformed
         return image

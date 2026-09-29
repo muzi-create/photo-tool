@@ -50,6 +50,24 @@ class ImageConversionServiceTests(unittest.TestCase):
 
         self.assertEqual(result.size, (50, 50))
 
+    def test_right_angle_rotation_swaps_dimensions_without_resampling(self):
+        source = Image.new("RGB", (3, 2))
+        source.putdata([
+            (255, 0, 0), (0, 255, 0), (0, 0, 255),
+            (255, 255, 0), (0, 255, 255), (255, 0, 255),
+        ])
+        options = ConversionOptions(
+            output_format="PNG",
+            transform=TransformOptions(angle=90),
+        )
+
+        result = ImageConversionService.transform_image(source, options)
+        self.addCleanup(result.close)
+        self.addCleanup(source.close)
+
+        self.assertEqual(result.size, (2, 3))
+        self.assertEqual(result.getpixel((1, 0)), (255, 0, 0))
+
     def test_transparent_image_gets_white_background_for_jpeg(self):
         source = Image.new("RGBA", (4, 4), (255, 0, 0, 0))
         options = ConversionOptions(output_format="JPEG")

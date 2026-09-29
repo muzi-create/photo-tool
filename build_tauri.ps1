@@ -1,16 +1,18 @@
 $ErrorActionPreference = "Stop"
 
-python -m reflex compile
+& "$PSScriptRoot\build_frontend.ps1"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-if (-not (Test-Path -LiteralPath "dist\sidecar\PhotoToolSidecar.exe")) {
-    python -m PyInstaller --clean --noconfirm sidecar.spec
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    New-Item -ItemType Directory -Force -Path "dist\sidecar" | Out-Null
-    Copy-Item -LiteralPath "dist\PhotoToolSidecar\PhotoToolSidecar.exe" -Destination "dist\sidecar\PhotoToolSidecar.exe" -Force
-}
+# The one-file sidecar embeds the Python source and exported web assets.  Always
+# rebuild it so that an existing executable cannot silently package stale code.
+python -m PyInstaller --clean --noconfirm --distpath "build\sidecar-output" sidecar.spec
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+New-Item -ItemType Directory -Force -Path "build\tauri-resources\sidecar" | Out-Null
+Copy-Item -LiteralPath "build\sidecar-output\PhotoToolSidecar.exe" -Destination "build\tauri-resources\sidecar\PhotoToolSidecar.exe" -Force
 
 npx tauri build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Tauri build complete: src-tauri\target\release\bundle\nsis"
+Write-Host "Distribute and launch only PhotoTool_*_x64-setup.exe; PhotoToolSidecar.exe is an internal background service."

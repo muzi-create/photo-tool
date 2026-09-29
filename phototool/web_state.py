@@ -47,15 +47,46 @@ def _format_size(size: int) -> str:
     return f"{size / (1024 * 1024):.1f} MB"
 
 
-def _image_to_png(image: Image.Image, maximum: int = 1400) -> bytes:
+_PREVIEW_MAXIMUM = 1400
+
+
+def _image_to_preview(image: Image.Image, maximum: int = _PREVIEW_MAXIMUM) -> tuple[bytes, str]:
+    """Encode a display-sized preview without retaining the full source image."""
     preview = image.copy()
     preview.thumbnail((maximum, maximum), Image.Resampling.LANCZOS)
-    if preview.mode not in {"RGB", "RGBA"}:
-        preview = preview.convert("RGBA")
     buffer = io.BytesIO()
-    preview.save(buffer, format="PNG", optimize=True)
+    has_transparency = preview.mode in {"RGBA", "LA"} or (
+        preview.mode == "P" and "transparency" in preview.info
+    )
+    if has_transparency:
+        if preview.mode == "P":
+            converted = preview.convert("RGBA")
+            preview.close()
+            preview = converted
+        preview.save(buffer, format="PNG", compress_level=1)
+        mime = "image/png"
+    else:
+        if preview.mode != "RGB":
+            converted = preview.convert("RGB")
+            preview.close()
+            preview = converted
+        preview.save(buffer, format="JPEG", quality=85)
+        mime = "image/jpeg"
     preview.close()
-    return buffer.getvalue()
+    return buffer.getvalue(), mime
+
+
+def _rotate_preview(image: Image.Image, angle: int) -> Image.Image:
+    """Use Pillow's lossless quarter-turn operations when possible."""
+    quarter_turns = {
+        90: Image.Transpose.ROTATE_270,
+        180: Image.Transpose.ROTATE_180,
+        270: Image.Transpose.ROTATE_90,
+    }
+    transpose = quarter_turns.get(angle % 360)
+    if transpose is not None:
+        return image.transpose(transpose)
+    return image.rotate(-angle, expand=True, resample=Image.Resampling.BICUBIC)
 
 
 class PhotoToolState(rx.State):
@@ -98,6 +129,9 @@ class PhotoToolState(rx.State):
     icon_preset: str = "Windows 系统图标"
     icon_format: str = "ICO (多尺寸)"
     icon_size: int = 256
+    icon_selected_sizes: list[int] = rx.field(
+        default_factory=lambda: list(ICON_PRESETS["Windows 系统图标"])
+    )
     corner_enabled: bool = False
     corner_shape: str = "圆角矩形"
     corner_radius: int = 20
@@ -148,12 +182,33 @@ class PhotoToolState(rx.State):
         )
 
     @rx.var
-    def icon_sizes(self) -> list[str]:
+    def icon_size_options(self) -> list[int]:
         if self.icon_preset == "自定义尺寸":
             sizes = [self.icon_size]
         else:
             sizes = ICON_PRESETS.get(self.icon_preset, [256])
-        return [f"{size} × {size}" for size in sizes]
+        return sorted(set(sizes))
+
+    @rx.var
+    def has_selected_icon_sizes(self) -> bool:
+        return bool(self.icon_selected_sizes)
+
+    @rx.var
+    def is_circle_corner(self) -> bool:
+        return self.corner_shape == "圆形"
+
+    @rx.var
+    def displayed_corner_radius(self) -> int:
+        """The radius represented by the currently selected mask and preview size."""
+        if self.corner_shape == "圆形":
+            return self._target_icon_size() // 2
+        return self.corner_radius
+
+    @rx.var
+    def corner_radius_hint(self) -> str:
+        if self.corner_shape == "圆形":
+            return f"圆形自动为尺寸的一半（当前 {self.displayed_corner_radius} px）"
+        return "1–200 px"
 
     def switch_mode(self, mode: str):
         self.active_mode = mode
@@ -179,6 +234,9 @@ class PhotoToolState(rx.State):
         self._update_file_meta()
         self._reset_editor()
         self._load_primary_preview()
+        # Start resize controls at the source dimensions shown below the preview.
+        self.resize_width = self.image_width
+        self.resize_height = self.image_height
         self.status = f"已载入 {len(payloads)} 个文件"
         return rx.toast.success("图片已载入")
 
@@ -211,18 +269,21 @@ class PhotoToolState(rx.State):
         if not self._files:
             return
         with Image.open(io.BytesIO(self._files[0][1])) as image:
-            image.load()
             self.image_width, self.image_height = image.size
+            # Resize before copying or transforming.  Repeating transformations should
+            # only touch a display-sized image, not a potentially multi-megapixel source.
+            image.thumbnail((_PREVIEW_MAXIMUM, _PREVIEW_MAXIMUM), Image.Resampling.LANCZOS)
             rendered = image.copy()
         if self.flip_h:
             rendered = rendered.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         if self.flip_v:
             rendered = rendered.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
         if self.rotation:
-            rotated = rendered.rotate(-self.rotation, expand=True, resample=Image.Resampling.BICUBIC)
+            rotated = _rotate_preview(rendered, self.rotation)
             rendered.close()
             rendered = rotated
-        self.preview_url = _data_url(_image_to_png(rendered))
+        preview_data, preview_mime = _image_to_preview(rendered)
+        self.preview_url = _data_url(preview_data, preview_mime)
         rendered.close()
         self._sync_crop_pixels()
 
@@ -506,6 +567,7 @@ class PhotoToolState(rx.State):
 
     def set_icon_preset(self, value: str):
         self.icon_preset = value
+        self.icon_selected_sizes = self._preset_icon_sizes()
         self._refresh_corner_preview()
 
     def set_icon_format(self, value: str):
@@ -513,7 +575,30 @@ class PhotoToolState(rx.State):
 
     def set_icon_size(self, value: str):
         self.icon_size = max(16, min(1024, int(value or 16)))
+        if self.icon_preset == "自定义尺寸":
+            self.icon_selected_sizes = [self.icon_size]
         self._refresh_corner_preview()
+
+    def set_icon_size_selected(self, size: int, selected: bool):
+        """Add or remove one generated size from the current platform preset."""
+        size = int(size)
+        selected_sizes = set(self.icon_selected_sizes)
+        if selected:
+            selected_sizes.add(size)
+        else:
+            selected_sizes.discard(size)
+        self.icon_selected_sizes = sorted(selected_sizes)
+
+    def select_all_icon_sizes(self):
+        self.icon_selected_sizes = self._preset_icon_sizes()
+
+    def clear_icon_sizes(self):
+        self.icon_selected_sizes = []
+
+    def _preset_icon_sizes(self) -> list[int]:
+        if self.icon_preset == "自定义尺寸":
+            return [self.icon_size]
+        return sorted(set(ICON_PRESETS.get(self.icon_preset, [256])))
 
     def set_corner_enabled(self, value: bool):
         self.corner_enabled = value
@@ -527,6 +612,10 @@ class PhotoToolState(rx.State):
         self.corner_radius = max(1, min(200, int(value or 1)))
         self._refresh_corner_preview()
 
+    def _corner_radius_for_size(self, size: int) -> int:
+        """A circular mask always has a radius equal to half its own size."""
+        return size // 2 if self.corner_shape == "圆形" else self.corner_radius
+
     def _target_icon_size(self) -> int:
         if self.icon_preset == "自定义尺寸":
             return self.icon_size
@@ -539,9 +628,7 @@ class PhotoToolState(rx.State):
         return representative.get(self.icon_preset, 256)
 
     def _target_icon_sizes(self) -> list[int]:
-        if self.icon_preset == "自定义尺寸":
-            return [self.icon_size]
-        return ICON_PRESETS.get(self.icon_preset, [self._target_icon_size()])
+        return sorted(set(self.icon_selected_sizes))
 
     def _refresh_corner_preview(self):
         if not self._icon_file:
@@ -554,9 +641,10 @@ class PhotoToolState(rx.State):
             preview = source.crop((left, top, left + side, top + side)).resize((160, 160), Image.Resampling.LANCZOS)
         if self.corner_enabled:
             shape = "rounded" if self.corner_shape == "圆角矩形" else "circle"
-            radius = round(self.corner_radius * 160 / self._target_icon_size())
+            radius = round(self._corner_radius_for_size(self._target_icon_size()) * 160 / self._target_icon_size())
             preview = ImageConverter._apply_mask_shape(preview, shape, radius)
-        self.corner_preview_url = _data_url(_image_to_png(preview, 160))
+        preview_data, preview_mime = _image_to_preview(preview, 160)
+        self.corner_preview_url = _data_url(preview_data, preview_mime)
         preview.close()
 
     def generate_icon(self):
@@ -565,7 +653,11 @@ class PhotoToolState(rx.State):
         self.processing = True
         self.progress = 10
         self.status = "正在生成图标…"
-        size = self._target_icon_size()
+        sizes = self._target_icon_sizes()
+        if not sizes:
+            self.processing = False
+            return rx.toast.warning("请至少选择一个生成尺寸")
+        size = max(sizes)
         mask = "none"
         if self.corner_enabled:
             mask = "rounded" if self.corner_shape == "圆角矩形" else "circle"
@@ -577,24 +669,30 @@ class PhotoToolState(rx.State):
                     outputs: list[tuple[str, bytes]] = []
                     formats = ["ICO", "PNG"] if self.icon_format == "ICO + PNG" else ["ICO" if self.icon_format.startswith("ICO") else "PNG"]
                     for output_format in formats:
-                        extension = ".ico" if output_format == "ICO" else ".png"
-                        name = f"icon_{size}x{size}{extension}"
-                        destination = Path(folder) / name
-                        if output_format == "ICO" and self.icon_format.startswith("ICO"):
+                        if output_format == "ICO":
+                            ico_sizes = [icon_size for icon_size in sizes if icon_size <= 256]
+                            if not ico_sizes:
+                                raise ValueError("ICO 格式仅支持不超过 256 px 的尺寸，请选择 PNG 或较小尺寸")
+                            name = "icon.ico"
+                            destination = Path(folder) / name
                             result = converter.generate_multi_size_ico(
                                 destination,
-                                sizes=self._target_icon_sizes(),
+                                sizes=ico_sizes,
                                 mask_shape=mask,
-                                corner_radius=self.corner_radius,
+                                corner_radius=self._corner_radius_for_size(max(ico_sizes)),
                             )
+                            outputs.append((name, Path(result).read_bytes()))
                         else:
-                            result = converter.generate_icon(
-                                destination, size=size, output_format=output_format,
-                                mask_shape=mask, corner_radius=self.corner_radius,
-                            )
-                        outputs.append((name, Path(result).read_bytes()))
+                            for icon_size in sizes:
+                                name = f"icon_{icon_size}x{icon_size}.png"
+                                destination = Path(folder) / name
+                                result = converter.generate_icon(
+                                    destination, size=icon_size, output_format="PNG",
+                                    mask_shape=mask, corner_radius=self._corner_radius_for_size(icon_size),
+                                )
+                                outputs.append((name, Path(result).read_bytes()))
                 self.progress = 100
-                self.status = "图标生成完成"
+                self.status = f"图标生成完成 · {len(sizes)} 个尺寸"
                 if len(outputs) == 1:
                     return rx.download(data=outputs[0][1], filename=outputs[0][0])
                 archive = io.BytesIO()

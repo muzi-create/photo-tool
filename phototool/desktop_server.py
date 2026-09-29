@@ -20,6 +20,7 @@ def serve(port: int = 8765) -> None:
     """Serve the compiled Reflex app on localhost for the webview."""
     root = resource_root()
     os.chdir(root)
+    os.environ["REFLEX_SKIP_COMPILE"] = "1"
     from reflex.environment import environment
     from phototool.phototool import app
 

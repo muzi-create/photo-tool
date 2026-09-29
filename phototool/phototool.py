@@ -159,10 +159,10 @@ def image_preview() -> rx.Component:
     )
 
 
-def number_input(value, handler, minimum: int = 1, maximum: int = 10000) -> rx.Component:
+def number_input(value, handler, minimum: int = 1, maximum: int = 10000, disabled=False) -> rx.Component:
     return rx.input(
         type="number", value=value, min=minimum, max=maximum,
-        on_change=handler, class_name="field-control",
+        on_change=handler, disabled=disabled, class_name="field-control",
     )
 
 
@@ -356,18 +356,48 @@ def icon_settings() -> rx.Component:
                     PhotoToolState.corner_enabled,
                     rx.vstack(
                         field("遮罩形状", rx.select(["圆角矩形", "圆形"], value=PhotoToolState.corner_shape, on_change=PhotoToolState.set_corner_shape, width="100%")),
-                        field("圆角半径", number_input(PhotoToolState.corner_radius, PhotoToolState.set_corner_radius, 1, 200), "px"),
+                        field(
+                            "圆角半径",
+                            number_input(
+                                PhotoToolState.displayed_corner_radius,
+                                PhotoToolState.set_corner_radius,
+                                1,
+                                200,
+                                disabled=PhotoToolState.is_circle_corner,
+                            ),
+                            PhotoToolState.corner_radius_hint,
+                        ),
                         spacing="4", width="100%",
                     ),
                 ),
             ),
             settings_section(
                 "ruler", "生成尺寸",
-                rx.flex(rx.foreach(PhotoToolState.icon_sizes, lambda size: rx.badge(size, " px", color_scheme="blue", variant="surface")), gap="2", wrap="wrap", width="100%"),
+                rx.vstack(
+                    rx.flex(
+                        rx.foreach(
+                            PhotoToolState.icon_size_options,
+                            lambda size: rx.checkbox(
+                                rx.text(size, " × ", size, " px"),
+                                checked=PhotoToolState.icon_selected_sizes.contains(size),
+                                on_change=PhotoToolState.set_icon_size_selected(size),
+                                class_name="icon-size-checkbox",
+                            ),
+                        ),
+                        gap="3", wrap="wrap", width="100%",
+                    ),
+                    rx.hstack(
+                        rx.button("全选", on_click=PhotoToolState.select_all_icon_sizes, class_name="link-button"),
+                        rx.button("清除", on_click=PhotoToolState.clear_icon_sizes, class_name="link-button"),
+                        spacing="2",
+                    ),
+                    rx.text("ICO 仅支持不超过 256 px 的已选尺寸", class_name="field-hint"),
+                    spacing="2", width="100%", align="start",
+                ),
             ),
             class_name="settings-scroll",
         ),
-        rx.box(rx.button(app_icon("download", 18), "生成图标并下载", on_click=PhotoToolState.generate_icon, disabled=~PhotoToolState.has_icon_file | PhotoToolState.processing, class_name="button-primary action-button"), class_name="settings-footer"),
+        rx.box(rx.button(app_icon("download", 18), "生成图标并下载", on_click=PhotoToolState.generate_icon, disabled=~PhotoToolState.has_icon_file | ~PhotoToolState.has_selected_icon_sizes | PhotoToolState.processing, class_name="button-primary action-button"), class_name="settings-footer"),
         class_name="panel settings-panel",
     )
 

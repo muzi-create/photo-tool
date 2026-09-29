@@ -7,13 +7,14 @@
     "frontendDist": "../.web/build/client",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "python -m reflex run",
-    "beforeBuildCommand": "python -m reflex compile"
+    "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\build_frontend.ps1"
   },
   "app": {
     "withGlobalTauri": false,
     "windows": [
       {
         "label": "main",
+        "url": "loading.html",
         "title": "PhotoTool · 企业级图片处理工作台",
         "width": 1440,
         "height": 920,
@@ -29,7 +30,12 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
-    "resources": ["../dist/sidecar/PhotoToolSidecar.exe"],
+    "resources": ["../build/tauri-resources/sidecar/PhotoToolSidecar.exe"],
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      }
+    },
     "icon": ["../assets/img/logo.ico"]
   }
 }

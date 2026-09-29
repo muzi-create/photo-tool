@@ -2,9 +2,17 @@
   "name": "phototool-desktop",
   "private": true,
   "scripts": {
-    "web:compile": "python -m reflex compile",
+    "web:setup": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (-not (Test-Path 'venv\\Scripts\\python.exe')) { python -m venv venv }; & 'venv\\Scripts\\python.exe' -m pip install -r requirements.txt\"",
+    "web:start": "venv\\Scripts\\python.exe -m reflex run",
+    "start": "npm run web:start",
+    "web:bootstrap": "npm run web:setup && npm run web:start",
+    "web:compile": "venv\\Scripts\\python.exe -m reflex compile",
+    "test": "venv\\Scripts\\python.exe -m unittest discover -s tests -v",
     "desktop:dev": "tauri dev",
-    "desktop:build": "powershell -ExecutionPolicy Bypass -File .\\build_tauri.ps1"
+    "desktop:build": "powershell -ExecutionPolicy Bypass -File .\\build_tauri.ps1",
+    "desktop:package": "npm run desktop:build",
+    "package": "npm run desktop:build",
+    "package:windows": "npm run desktop:build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.0"
