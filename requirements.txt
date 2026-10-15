@@ -1,4 +1,9 @@
 Pillow>=10.0.0
 reflex>=0.8,<0.9
+# Reflex imports SQLAlchemy's async runtime; SQLAlchemy 2.1 makes greenlet optional.
+SQLAlchemy[asyncio]>=2.0.14,<2.2
+# The desktop service explicitly uses Uvicorn's websockets protocol.
+uvicorn>=0.30,<1
+websockets>=13,<17
 pywebview>=5.4,<6
 pyinstaller>=6.10,<7

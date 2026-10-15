@@ -25,6 +25,8 @@ hidden = [
         "phototool.core.conversion", "phototool.core.image_converter", "phototool.sidecar",
         "uvicorn.loops.asyncio", "uvicorn.protocols.http.h11_impl",
         "uvicorn.protocols.websockets.websockets_impl",
+        # SQLAlchemy's async runtime loads greenlet and its native extension lazily.
+        "sqlalchemy.ext.asyncio", "greenlet", "greenlet._greenlet",
     ]
 hidden += collect_submodules("reflex.components.base")
 hidden += collect_submodules("reflex.components.radix")

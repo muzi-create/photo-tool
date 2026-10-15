@@ -9,6 +9,15 @@ from starlette.responses import FileResponse
 from phototool.sidecar import bind_reflex_app, configure_static_mime_types
 
 
+class AsyncDatabaseRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_sqlalchemy_async_session_runs_sync_callback(self):
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        async with AsyncSession() as session:
+            result = await session.run_sync(lambda sync_session: sync_session.info)
+            self.assertEqual(result, {})
+
+
 class StaticAssetMimeTests(unittest.TestCase):
     def test_javascript_modules_are_served_as_javascript(self):
         configure_static_mime_types()

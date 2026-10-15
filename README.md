@@ -35,6 +35,9 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 `requirements.txt` 管理 Python 依赖；`package-lock.json` 固定 Tauri CLI 依赖；`src-tauri/Cargo.lock` 固定 Rust 依赖。Reflex 首次编译时会生成 `.web/` 并安装前端依赖。
 
+Python 依赖显式包含 `SQLAlchemy[asyncio]`，以安装 Reflex 异步运行所需的 `greenlet`。SQLAlchemy 2.1 默认不再安装它；桌面打包配置也会包含它的原生扩展。
+桌面服务直接使用的 `uvicorn` 和 `websockets` 同样由 `requirements.txt` 安装，避免依赖其他包间接提供。
+
 ## 开发与运行
 
 ### 浏览器开发
@@ -122,7 +125,7 @@ python -m unittest discover -s tests -v
 node --check assets/crop_interactions.js
 ```
 
-测试覆盖图片变换、透明度处理、小尺寸 PNG、多尺寸 ICO、静态资源 MIME 类型和打包环境下的 Reflex 应用查找。
+测试覆盖图片变换、透明度处理、小尺寸 PNG、多尺寸 ICO、SQLAlchemy 异步运行、静态资源 MIME 类型和打包环境下的 Reflex 应用查找。
 
 检查 Rust 代码时，需先通过完整打包流程生成 Sidecar 资源，然后执行：
 
@@ -185,6 +188,7 @@ PhotoTool/
 ## 常见问题
 
 - **找不到 Reflex 或其他 Python 模块**：确认终端已激活 `venv`，再执行 `python -m pip install -r requirements.txt`。
+- **提示 SQLAlchemy asyncio 缺少 greenlet**：在项目根目录执行 `.\venv\Scripts\python.exe -m pip install -r requirements.txt`，然后重启服务。安装版出现此错误时，需在依赖安装完成后执行 `build_tauri.ps1` 重新打包并安装；修改本机 Python 环境不会更新已有 exe。
 - **端口被占用**：浏览器开发检查 3000/8000，Python 窗口预览检查 8765；关闭先前启动的服务。安装版会自动选择空闲端口。
 - **生成后找不到文件**：桌面版需在保存窗口中确认位置；取消窗口会取消下载。浏览器版检查默认下载文件夹及浏览器下载记录。
 - **打包后按钮或上传无响应**：使用完整的 `build_tauri.ps1` 重新打包，确保前端地址修正和最新 Sidecar 均已包含。
