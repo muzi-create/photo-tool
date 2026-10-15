@@ -1,9 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import sys
 from PyInstaller.building.build_main import Analysis, EXE, PYZ
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files
 
 root = Path(SPECPATH)
+sys.path.insert(0, str(root))
+from phototool.dependencies import (
+    collect_bundle_imports, failure_message, import_failures, read_dependency_config,
+)
+
+# Installation, import checks and frozen imports share requirements.txt.
+hidden = list(collect_bundle_imports(read_dependency_config(root / "requirements.txt")))
+failures = import_failures(hidden)
+if failures:
+    raise SystemExit(failure_message(failures))
+
 reflex_datas = collect_data_files("reflex")
 uvicorn_datas = collect_data_files("uvicorn")
 datas = [
@@ -16,23 +28,6 @@ datas = [
     *reflex_datas,
     *uvicorn_datas,
 ]
-hidden = [
-        "reflex", "reflex.app", "reflex.environment", "reflex.compiler",
-        "reflex.state", "reflex.utils", "reflex.utils.exec", "reflex.utils.prerequisites",
-        "reflex.plugins", "reflex.plugins.sitemap", "reflex.components",
-        "reflex.components.component", "reflex.components.base.meta", "reflex.vars", "reflex.vars.base",
-        "phototool.phototool", "phototool.web_state", "phototool.core",
-        "phototool.core.conversion", "phototool.core.image_converter", "phototool.sidecar",
-        "uvicorn.loops.asyncio", "uvicorn.protocols.http.h11_impl",
-        "uvicorn.protocols.websockets.websockets_impl",
-        # SQLAlchemy's async runtime loads greenlet and its native extension lazily.
-        "sqlalchemy.ext.asyncio", "greenlet", "greenlet._greenlet",
-    ]
-hidden += collect_submodules("reflex.components.base")
-hidden += collect_submodules("reflex.components.radix")
-hidden += collect_submodules("reflex.components.lucide")
-hidden += collect_submodules("reflex.components.el")
-hidden += collect_submodules("reflex.components.core")
 a = Analysis(
     [str(root / "phototool" / "sidecar.py")],
     pathex=[str(root)], binaries=[],

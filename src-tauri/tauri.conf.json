@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../.web/build/client",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "python -m reflex run",
+    "beforeDevCommand": "npm run web:start",
     "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\build_frontend.ps1"
   },
   "app": {

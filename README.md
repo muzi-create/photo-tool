@@ -23,6 +23,7 @@ ICO 仅支持不超过 256 px 的尺寸。选择 PNG 时，每个勾选尺寸生
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m phototool.dependencies
 npm ci
 ```
 
@@ -37,6 +38,26 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Python 依赖显式包含 `SQLAlchemy[asyncio]`，以安装 Reflex 异步运行所需的 `greenlet`。SQLAlchemy 2.1 默认不再安装它；桌面打包配置也会包含它的原生扩展。
 桌面服务直接使用的 `uvicorn` 和 `websockets` 同样由 `requirements.txt` 安装，避免依赖其他包间接提供。
+
+### 依赖声明与导入检查
+
+安装包版本、需要导入的模块和递归收集的模块包统一在 `requirements.txt` 维护。导入配置使用注释，保持兼容标准 `pip install -r requirements.txt`：
+
+```text
+# import: PIL.Image PIL.ImageFilter
+Pillow>=10.0.0
+```
+
+| 注释配置 | 用途 |
+| --- | --- |
+| `# import: 模块名 ...` | 检查后台服务必需模块，并交给 PyInstaller 收集。 |
+| `# collect-submodules: 包名 ...` | 递归收集并检查整个组件包；用于 Reflex 动态组件。 |
+| `# preview-import: 模块名 ...` | 检查 Python 原生窗口预览使用的依赖。 |
+| `# build-import: 模块名 ...` | 检查打包工具使用的依赖。 |
+
+新增外部依赖时，同时添加安装包声明及对应的导入注释；包名与导入名可能不同，例如 `Pillow` 对应 `PIL`、`pywebview` 对应 `webview`。`greenlet._greenlet` 等原生扩展也需要列入检查。
+
+执行 `python -m phototool.dependencies` 或 `npm run web:check` 检查所有配置的导入（包括递归组件）及 `pip check`。可用 `--profile runtime`、`preview` 或 `build` 只检查对应入口。失败时会列出无法导入的模块，并给出使用当前 Python 解释器安装依赖的完整命令。
 
 ## 开发与运行
 
@@ -57,7 +78,7 @@ npm run web:setup
 npm run web:start
 ```
 
-`web:setup` 会创建或复用 `venv` 并安装 Python 依赖；`web:start` 使用该环境启动 Reflex。`npm run web:bootstrap` 可连续完成这两步。
+`web:setup` 调用 `setup_python.ps1` 创建或复用 `venv`，安装依赖并完成全部导入检查；`web:start` 和 `web:compile` 在运行前检查后台依赖。`npm run web:bootstrap` 可连续完成安装检查和启动。
 
 ### Python 原生窗口预览
 
@@ -71,6 +92,7 @@ python main.py
 `build_frontend.ps1` 会导出生产前端、将事件和上传地址修正为当前页面地址，并生成桌面加载页。请使用此脚本完成导出，避免动态端口下的按钮和上传连接到错误服务。
 
 源码预览默认使用本机 8765 端口。关闭窗口后，进程及本地服务一同结束。
+`python main.py` 会先检查后台及 PyWebView 依赖；检查失败时停止启动并显示修复命令。
 
 ## Windows 打包
 
@@ -88,7 +110,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_tauri.ps1
 
 也可在已激活虚拟环境的终端执行 `npm run desktop:build` 或 `npm run package`。
 
-构建流程为：导出前端 → 使用 `sidecar.spec` 重新生成 Python Sidecar → 复制 Sidecar 资源 → 构建 Tauri 窗口及 NSIS 安装包。每次都会重新生成 Sidecar，确保安装包包含最新 Python 代码和前端。
+构建流程为：检查依赖导入 → 导出前端 → 使用 `sidecar.spec` 重新生成 Python Sidecar → 复制 Sidecar 资源 → 构建 Tauri 窗口及 NSIS 安装包。构建脚本优先使用项目 `venv`，不存在时使用当前 `python`。每次都会重新生成 Sidecar，确保安装包包含最新 Python 代码和前端。
+
+`sidecar.spec` 直接读取 `requirements.txt` 中的导入配置，不再单独维护隐藏导入列表；缺失模块或递归组件无法导入时立即停止打包。依赖安装仍由环境准备步骤完成。
 
 交付文件为：
 
@@ -125,7 +149,7 @@ python -m unittest discover -s tests -v
 node --check assets/crop_interactions.js
 ```
 
-测试覆盖图片变换、透明度处理、小尺寸 PNG、多尺寸 ICO、SQLAlchemy 异步运行、静态资源 MIME 类型和打包环境下的 Reflex 应用查找。
+测试覆盖依赖清单解析、多项导入失败报告、实际后台模块导入、图片变换、透明度处理、小尺寸 PNG、多尺寸 ICO、SQLAlchemy 异步运行、静态资源 MIME 类型和打包环境下的 Reflex 应用查找。
 
 检查 Rust 代码时，需先通过完整打包流程生成 Sidecar 资源，然后执行：
 
@@ -146,6 +170,7 @@ PhotoTool/
 │   │   ├── conversion.py             # 图片变换与格式转换
 │   │   └── image_converter.py        # 图标生成、遮罩及图片处理
 │   ├── desktop_launcher.py           # PyWebView 源码预览窗口
+│   ├── dependencies.py               # 读取统一清单、导入检查与打包模块收集
 │   ├── desktop_server.py             # 源码预览使用的本地服务
 │   ├── patch_exported_frontend.py    # 导出后修正后端连接地址
 │   ├── phototool.py                  # Reflex 页面组件
@@ -163,7 +188,8 @@ PhotoTool/
 ├── main.py                           # Python 原生窗口预览入口
 ├── rxconfig.py                       # Reflex 配置与标识开关
 ├── sidecar.spec                      # 当前 PyInstaller Sidecar 配置
-├── requirements.txt                  # Python 依赖
+├── requirements.txt                  # Python 依赖与导入配置
+├── setup_python.ps1                  # 安装 Python 依赖并检查所有导入
 └── package.json                      # npm 快捷命令与 Tauri CLI 依赖
 ```
 

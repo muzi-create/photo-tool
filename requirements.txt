@@ -1,9 +1,41 @@
+# pip ignores the import directives below. PhotoTool's dependency checker and
+# PyInstaller configuration read them as their shared import manifest.
+# The 'import' directive includes a required module in the Sidecar.
+# 'collect-submodules' recursively includes and checks a package's modules.
+# 'preview-import' and 'build-import' check the corresponding source tools.
+
+# import: PIL.Image PIL.ImageFilter
+# import: PIL.ImageColor PIL.ImageDraw PIL.ImageFont
 Pillow>=10.0.0
+
+# import: reflex reflex.app reflex.environment reflex.compiler
+# import: reflex.state reflex.utils reflex.utils.exec reflex.utils.prerequisites
+# import: reflex.plugins reflex.plugins.sitemap reflex.components
+# import: reflex.components.component reflex.components.base.meta reflex.vars reflex.vars.base
+# collect-submodules: reflex.components.base reflex.components.radix reflex.components.lucide
+# collect-submodules: reflex.components.el reflex.components.core
 reflex>=0.8,<0.9
-# Reflex imports SQLAlchemy's async runtime; SQLAlchemy 2.1 makes greenlet optional.
+
+# Reflex uses SQLAlchemy's async runtime; SQLAlchemy 2.1 makes greenlet optional.
+# import: sqlalchemy.ext.asyncio
 SQLAlchemy[asyncio]>=2.0.14,<2.2
-# The desktop service explicitly uses Uvicorn's websockets protocol.
+# import: greenlet greenlet._greenlet
+greenlet>=3,<4
+
+# The desktop service selects these Uvicorn protocols dynamically.
+# import: uvicorn uvicorn.loops.asyncio uvicorn.protocols.http.h11_impl
+# import: uvicorn.protocols.websockets.websockets_impl uvicorn.lifespan.off
 uvicorn>=0.30,<1
+# import: websockets websockets.legacy.server
 websockets>=13,<17
+# import: starlette.responses
+starlette>=0.47,<2
+
+# preview-import: webview
 pywebview>=5.4,<6
+# build-import: PyInstaller.building.build_main PyInstaller.utils.hooks
 pyinstaller>=6.10,<7
+
+# Project modules loaded dynamically by Reflex in the frozen service.
+# import: phototool.phototool phototool.web_state phototool.core
+# import: phototool.core.conversion phototool.core.image_converter phototool.sidecar

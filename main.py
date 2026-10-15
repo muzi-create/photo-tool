@@ -1,9 +1,13 @@
 """Windows desktop entry point for PhotoTool."""
 
-from phototool.desktop_launcher import run_desktop
+from phototool.dependencies import main as check_dependencies
 
 
 def main():
+    if check_dependencies(["--profile", "preview"]):
+        return 1
+    from phototool.desktop_launcher import run_desktop
+
     return run_desktop()
 
 

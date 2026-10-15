@@ -1,9 +1,14 @@
 $ErrorActionPreference = "Stop"
 
-python -m reflex export --frontend-only --no-zip
+$projectPython = Join-Path $PSScriptRoot "venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $projectPython)) { $projectPython = "python" }
+& $projectPython -m phototool.dependencies --profile runtime
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-python phototool\patch_exported_frontend.py
+& $projectPython -m reflex export --frontend-only --no-zip
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $projectPython phototool\patch_exported_frontend.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (-not (Test-Path -LiteralPath ".web\build\client\index.html")) {
