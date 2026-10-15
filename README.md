@@ -1,184 +1,194 @@
 # PhotoTool
 
-基于 **Reflex + Pillow** 的企业级图片处理工作台，采用白蓝配色与响应式 Web 界面。图片在本机 Reflex 服务内处理，不依赖外部云端接口。
-
-## 一键启动（Windows PowerShell）
-
-在项目根目录打开 PowerShell，直接粘贴并运行以下命令。首次运行会创建 `venv`、安装依赖，然后启动浏览器开发服务；后续运行会复用已有环境。
-
-```powershell
-if (-not (Test-Path .\venv\Scripts\python.exe)) { python -m venv venv }; .\venv\Scripts\python.exe -m pip install -r requirements.txt; .\venv\Scripts\python.exe -m reflex run
-```
-
-如果已完成环境配置，使用以下命令即可快速启动：
-
-```powershell
-.\venv\Scripts\python.exe -m reflex run
-```
-
-启动完成后访问 http://127.0.0.1:3000 。保持终端窗口打开，按 `Ctrl+C` 停止服务。
+面向个人的本地图片处理工具，基于 Reflex、Pillow 和 Tauri 开发。支持浏览器开发、Python 原生窗口预览和 Windows 安装包；图片由本机 Python 服务处理。
 
 ## 功能
 
-- 格式转换：JPEG / PNG / WEBP / BMP，支持批量结果 ZIP 下载
-- 质量与尺寸：质量控制、自定义宽高、保持宽高比；上传后默认同步原图像素尺寸
-- 旋转翻转：90° 旋转、水平/垂直翻转和实时预览；预览以显示尺寸处理，大图操作更流畅
-- 裁剪：自由选区、固定尺寸、锁定比例、预设尺寸、撤销与恢复原图
-- 图标生成：iOS / Android / Windows / Favicon 等多平台预设、可勾选生成尺寸、ICO/PNG 输出和圆角遮罩
+- 将图片转换为 JPEG、PNG、WEBP、BMP；多张图片自动打包为 ZIP。
+- 调整输出质量、尺寸和宽高比，支持旋转、翻转、裁剪、撤销裁剪及恢复原图。
+- 生成 Windows、iOS、Android、Favicon 等预设图标，支持自定义尺寸、多尺寸 ICO、PNG 和 ZIP。
+- 为图标添加圆形或圆角矩形遮罩；圆形半径自动取各输出尺寸的一半。
+- 桌面版生成结果后弹出保存窗口；浏览器版遵循浏览器的下载设置。
+- 生产构建已关闭右下角的“Built with Reflex”标识。
 
-### 图标生成说明
+ICO 仅支持不超过 256 px 的尺寸。选择 PNG 时，每个勾选尺寸生成一个文件；选择 ICO 时，所有有效尺寸写入一个 `icon.ico`；选择 ICO + PNG 时，两种格式合并为 ZIP。未选择尺寸时无法生成。
 
-- 在“生成尺寸”中勾选需要输出的尺寸；可使用“全选”和“清除”。未选择任何尺寸时不能生成。
-- 选择 `PNG` 时，会为每个勾选尺寸生成一个 PNG；选择 `ICO (多尺寸)` 时，会将勾选的有效尺寸合并为一个 `icon.ico`；选择 `ICO + PNG` 时会同时生成两类文件并下载 ZIP。
-- ICO 格式仅支持不超过 `256 × 256 px` 的尺寸。若只勾选了更大的尺寸，请改用 PNG，或同时勾选至少一个不超过 256 px 的尺寸。
-- 圆角遮罩中，“圆角矩形”支持手动设置半径；“圆形”会禁用半径输入并自动使用各输出尺寸的一半作为半径。
+## 环境准备
 
-## 从源码启动（推荐）
-
-下面的方式直接运行项目源码，**不需要**安装或启动 `dist/`、`src-tauri/target/` 中的打包产物。
-
-### 1. 准备环境
+日常开发需要 Python 3.10+ 和 Node.js（建议 22 LTS）。制作 Windows 安装包还需要 Rust stable、Visual Studio C++ 构建工具和 Windows SDK；运行桌面窗口需要 Microsoft Edge WebView2 Runtime。
 
 在项目根目录打开 PowerShell：
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+npm ci
 ```
 
-如果 PowerShell 阻止激活虚拟环境，可只对当前终端放开限制后重试：
+每次打开新终端时，先激活 `venv`。如果 PowerShell 阻止激活脚本，可仅为当前终端设置：
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\venv\Scripts\Activate.ps1
 ```
 
-### 2. 启动浏览器开发模式
+`requirements.txt` 管理 Python 依赖；`package-lock.json` 固定 Tauri CLI 依赖；`src-tauri/Cargo.lock` 固定 Rust 依赖。Reflex 首次编译时会生成 `.web/` 并安装前端依赖。
+
+## 开发与运行
+
+### 浏览器开发
+
+激活虚拟环境后执行：
 
 ```powershell
 python -m reflex run
 ```
 
-首次启动会安装/生成前端依赖，耗时会稍长。启动完成后，在浏览器访问：
+访问 [http://127.0.0.1:3000](http://127.0.0.1:3000)。Reflex 后端默认使用 8000 端口；保持终端打开，按 `Ctrl+C` 停止服务。页面和状态代码修改后会自动刷新。
 
-- 前端页面：http://127.0.0.1:3000
-- Reflex 后端：http://127.0.0.1:8000
-
-保持该终端窗口打开；按 `Ctrl+C` 可停止服务。修改 Python、页面或样式文件后，Reflex 会自动重新编译或刷新页面。
-
-### 3. 可选：以本地原生窗口运行源码
-
-此模式使用 Python + PyWebView，不是 Tauri 打包版。先生成本地静态前端资源，再启动窗口：
+也可以使用 npm 快捷命令：
 
 ```powershell
-python -m reflex export --frontend-only --no-zip
+npm run web:setup
+npm run web:start
+```
+
+`web:setup` 会创建或复用 `venv` 并安装 Python 依赖；`web:start` 使用该环境启动 Reflex。`npm run web:bootstrap` 可连续完成这两步。
+
+### Python 原生窗口预览
+
+此入口用于从源码预览桌面窗口，使用 PyWebView。先导出前端，再启动：
+
+```powershell
+.\build_frontend.ps1
 python main.py
 ```
 
-窗口关闭后，本地服务会随 Python 进程结束。若端口 `8765` 已被占用，请先关闭先前运行的 PhotoTool/Sidecar 进程。
+`build_frontend.ps1` 会导出生产前端、将事件和上传地址修正为当前页面地址，并生成桌面加载页。请使用此脚本完成导出，避免动态端口下的按钮和上传连接到错误服务。
 
-### 常见问题
+源码预览默认使用本机 8765 端口。关闭窗口后，进程及本地服务一同结束。
 
-- `No module named reflex`：确认已激活 `venv`，再执行 `python -m pip install -r requirements.txt`。
-- `3000` 或 `8000` 端口被占用：停止占用该端口的开发服务，再重新执行 `python -m reflex run`。
-- 不要双击 `src-tauri\target\release\phototool-desktop.exe` 来开发；它依赖安装包附带的资源。开发时请使用上面的 `python -m reflex run`。
+## Windows 打包
 
-## 原有简要启动命令
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-python -m reflex run
-```
-
-`python -m reflex run` 用于浏览器开发模式；`python main.py` 需要先执行一次前端导出，详见“从源码启动”。
-
-## 测试与构建
-
-```bash
-python -m unittest discover -s tests -v
-reflex compile
-reflex export
-```
-
-## Windows 桌面打包（Tauri + Python Sidecar）
-
-在 Windows Python 环境执行：
+激活已安装依赖的虚拟环境，并在项目根目录执行：
 
 ```powershell
-pip install -r requirements.txt
-npm install
 .\build_tauri.ps1
 ```
 
-软件拆分为三个独立层级：
-
-1. `src-tauri/`：Rust/Tauri 原生 Windows 窗口、生命周期与 Sidecar 启停。
-2. `phototool/sidecar.py`：Python + Uvicorn + Reflex 后端，调用 Pillow 核心处理图片。
-3. `.web/build/client/`：Reflex 编译后的前端静态资源，负责白蓝企业级页面和交互。
-
-打包结果为 Tauri NSIS 安装包和 Windows 可执行文件。构建脚本会先编译前端，再用 PyInstaller 生成 `PhotoToolSidecar.exe`，最后由 Tauri 将 Sidecar、静态页面和图标打包进安装程序。启动后默认窗口为 1440 × 920，最小尺寸为 1100 × 720，并居中显示；关闭窗口时 Tauri 会终止 Sidecar。
-
-构建完成后，交付和启动的文件是：
-
-```text
-src-tauri\target\release\bundle\nsis\PhotoTool_1.0.0_x64-setup.exe
-```
-
-请安装它，并从开始菜单或安装目录的 `phototool-desktop.exe` 启动。`PhotoToolSidecar.exe` 是仅供桌面壳调用的本地 HTTP 后端，**直接双击时不会打开窗口或页面**；任务管理器中出现它的进程是预期行为，不能作为用户启动入口。
-
-### 打包产物路径与用途
-
-下表中的路径均相对于项目根目录。除安装包外，其余内容均是构建中间产物或安装后的内部资源，通常不需要交付给最终用户。
-
-| 路径 | 作用 | 是否直接交付/启动 |
-| --- | --- | --- |
-| `src-tauri\target\release\bundle\nsis\PhotoTool_1.0.0_x64-setup.exe` | Windows NSIS 安装包。它包含 Tauri 桌面窗口、前端文件和 Python Sidecar。 | **是。**交付给用户并双击安装。 |
-| `C:\Users\<用户名>\AppData\Local\PhotoTool\phototool-desktop.exe` | 安装程序释放的实际桌面应用；开始菜单快捷方式也指向此文件。 | **是。**安装后由快捷方式或此文件启动。 |
-| `build\sidecar-output\PhotoToolSidecar.exe` | PyInstaller 生成的 Python 本地服务。构建脚本临时使用它来制作安装包。 | 否。无窗口，不能单独作为应用启动。 |
-| `build\tauri-resources\sidecar\PhotoToolSidecar.exe` | 供 Tauri 复制进安装包的 Sidecar 资源副本。 | 否。仅由 `phototool-desktop.exe` 自动启动。 |
-| `dist\PhotoToolSidecar.exe` 或 `dist\sidecar\PhotoToolSidecar.exe` | 旧版构建留下的 Sidecar 产物；新构建不会再将它作为顶层交付文件。 | 否。可忽略，不要发给用户作为启动程序。 |
-| `.web\build\client\` | Reflex 导出的静态前端（HTML、JavaScript、CSS 等），由安装包包含。 | 否。构建输入/资源目录。 |
-| `src-tauri\target\release\phototool-desktop.exe` | 未安装的 Rust/Tauri 构建输出，缺少安装包布局下的资源时可能无法正常运行。 | 否。请使用 NSIS 安装包。 |
-| `build\sidecar\` 与 `src-tauri\target\` | PyInstaller/Rust 的缓存、对象文件与构建日志。 | 否。用于加速下次构建。 |
-
-启动链路如下：`phototool-desktop.exe` 创建窗口并启动 `PhotoToolSidecar.exe`；Sidecar 在本机随机端口提供页面；窗口连接该本地地址后显示界面。因而只看到 Sidecar 进程但没有窗口，通常表示启动了内部服务文件，而不是用户入口。
-
-如果 PowerShell 禁止执行脚本，也可以直接执行：
+如果当前终端禁止运行脚本：
 
 ```powershell
-python -m reflex export --frontend-only --no-zip
-python -m PyInstaller --clean --noconfirm --distpath build\sidecar-output sidecar.spec
-New-Item -ItemType Directory -Force -Path build\tauri-resources\sidecar
-Copy-Item build\sidecar-output\PhotoToolSidecar.exe build\tauri-resources\sidecar\PhotoToolSidecar.exe
-npx tauri build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build_tauri.ps1
+```
+
+也可在已激活虚拟环境的终端执行 `npm run desktop:build` 或 `npm run package`。
+
+构建流程为：导出前端 → 使用 `sidecar.spec` 重新生成 Python Sidecar → 复制 Sidecar 资源 → 构建 Tauri 窗口及 NSIS 安装包。每次都会重新生成 Sidecar，确保安装包包含最新 Python 代码和前端。
+
+交付文件为：
+
+```text
+src-tauri/target/release/bundle/nsis/PhotoTool_1.0.0_x64-setup.exe
+```
+
+版本号随 `src-tauri/tauri.conf.json` 的 `version` 变化。双击安装后，从开始菜单或安装目录中的 `phototool-desktop.exe` 启动。窗口默认 1440 × 920，最小 1100 × 720。
+
+`PhotoToolSidecar.exe` 是窗口自动调用的后台服务，直接双击不会显示界面。修改源码后，需要重新打包并安装才能更新已安装的软件。
+
+### 构建文件的作用
+
+| 路径 | 用途 |
+| --- | --- |
+| `src-tauri/target/release/bundle/nsis/` | 对外交付的安装包。 |
+| `build/sidecar-output/PhotoToolSidecar.exe` | PyInstaller 生成的后台服务。 |
+| `build/tauri-resources/sidecar/PhotoToolSidecar.exe` | Tauri 打包使用的资源副本。 |
+| `.web/build/client/` | 导出的 HTML、JavaScript、CSS 和加载页。 |
+| `src-tauri/target/` 的其他内容 | Rust 构建缓存、中间文件和未安装的程序。 |
+
+安装后的窗口启动 Sidecar，由 Sidecar 在本机随机端口提供界面与图片处理服务。点击窗口关闭按钮时可选择：
+
+- **最小化到系统托盘**：隐藏主窗口，保留当前工作和后台服务。单击托盘图标或在托盘菜单选择“打开 PhotoTool”即可恢复。
+- **退出程序**：关闭应用并结束 Sidecar 进程树；也可从托盘右键菜单直接退出。
+- **取消**：返回当前窗口。
+
+上述关闭选择适用于 Tauri 打包版；`python main.py` 的 PyWebView 预览仍在关闭窗口时结束。后台服务和退出时的清理命令均以无控制台窗口方式运行。
+
+## 测试与检查
+
+```powershell
+python -m unittest discover -s tests -v
+node --check assets/crop_interactions.js
+```
+
+测试覆盖图片变换、透明度处理、小尺寸 PNG、多尺寸 ICO、静态资源 MIME 类型和打包环境下的 Reflex 应用查找。
+
+检查 Rust 代码时，需先通过完整打包流程生成 Sidecar 资源，然后执行：
+
+```powershell
+cargo check --locked --manifest-path src-tauri/Cargo.toml
 ```
 
 ## 项目结构
 
 ```text
 PhotoTool/
-├── main.py                     # 本地启动入口
-├── rxconfig.py                 # Reflex 配置
 ├── assets/
-│   ├── styles.css              # 企业级白蓝主题
-│   └── crop_interactions.js    # 裁剪拖动与缩放交互
+│   ├── crop_interactions.js          # 裁剪拖拽与前端状态同步
+│   ├── styles.css                    # 页面样式
+│   └── img/logo.ico                  # Windows 应用与安装包图标
 ├── phototool/
-│   ├── phototool.py            # Reflex 页面与组件
-│   ├── web_state.py            # 页面状态与业务适配
-│   └── core/                   # UI 无关的 Pillow 处理核心
-└── tests/                      # 核心处理测试
+│   ├── core/
+│   │   ├── conversion.py             # 图片变换与格式转换
+│   │   └── image_converter.py        # 图标生成、遮罩及图片处理
+│   ├── desktop_launcher.py           # PyWebView 源码预览窗口
+│   ├── desktop_server.py             # 源码预览使用的本地服务
+│   ├── patch_exported_frontend.py    # 导出后修正后端连接地址
+│   ├── phototool.py                  # Reflex 页面组件
+│   ├── sidecar.py                    # Tauri 调用的 Python 服务入口
+│   └── web_state.py                  # 页面状态、上传与下载事件
+├── src-tauri/
+│   ├── src/main.rs                   # 窗口与 Sidecar 生命周期
+│   ├── src/downloads.rs              # Windows 保存位置选择
+│   ├── src/tray.rs                   # 关闭选择、托盘菜单与窗口恢复
+│   ├── nsis-hooks.nsh                # 安装升级时刷新旧 Sidecar
+│   └── tauri.conf.json               # 桌面窗口和安装包配置
+├── tests/                            # Python 回归测试
+├── build_frontend.ps1                # 导出并修正桌面前端
+├── build_tauri.ps1                   # 完整 Windows 打包入口
+├── main.py                           # Python 原生窗口预览入口
+├── rxconfig.py                       # Reflex 配置与标识开关
+├── sidecar.spec                      # 当前 PyInstaller Sidecar 配置
+├── requirements.txt                  # Python 依赖
+└── package.json                      # npm 快捷命令与 Tauri CLI 依赖
 ```
 
-## 技术栈
+当前界面使用 Reflex。旧 PyQt5 界面、旧版整包 PyInstaller 入口及仅供旧界面使用的资源已移除。
 
-- Python 3.10+
-- Reflex 0.8.x
-- Pillow 10+
+## 生成文件与清理
 
-## License
+以下目录由工具生成，已加入 Git 忽略规则：
 
-MIT
+| 路径 | 是否可以清理及恢复方式 |
+| --- | --- |
+| `__pycache__/`、`.pytest_cache/`、`.ruff_cache/` | 可清理；执行代码或检查时自动生成。 |
+| `build/`、`dist/` | 可清理；`build_tauri.ps1` 重建当前打包资源。 |
+| `src-tauri/target/`、`src-tauri/gen/` | 可清理；Rust/Tauri 下次构建时重新生成。清理会同时删除本地安装包。 |
+| `.web/` | 包含前端依赖、工具配置和导出页面；通常保留。需要重建时重新执行 Reflex 开发或前端导出。 |
+| `node_modules/` | 当前 Tauri CLI 依赖；需要重装时执行 `npm ci`。 |
+| `venv/` | 当前 Python 虚拟环境；需要重建时按“环境准备”安装依赖。 |
+| `.states/`、`uploaded_files/`、`*.log` | 运行时状态、上传文件及诊断信息；清理前确认其中没有需要保留的数据。 |
+
+执行缓存清理前先退出运行中的应用和构建进程。项目级编辑器设置保存在 `.idea/` 或 `.vscode/`，按个人需要保留。
+
+## 常见问题
+
+- **找不到 Reflex 或其他 Python 模块**：确认终端已激活 `venv`，再执行 `python -m pip install -r requirements.txt`。
+- **端口被占用**：浏览器开发检查 3000/8000，Python 窗口预览检查 8765；关闭先前启动的服务。安装版会自动选择空闲端口。
+- **生成后找不到文件**：桌面版需在保存窗口中确认位置；取消窗口会取消下载。浏览器版检查默认下载文件夹及浏览器下载记录。
+- **打包后按钮或上传无响应**：使用完整的 `build_tauri.ps1` 重新打包，确保前端地址修正和最新 Sidecar 均已包含。
+- **双击 Sidecar 没有窗口**：启动入口是安装后的 `phototool-desktop.exe`，源码预览入口是 `python main.py`。
+- **更新源码后旧问题仍存在**：旧安装包和已安装程序不会自动更新；重新打包并安装最新安装包。
+
+安装版诊断日志通常位于 `%LOCALAPPDATA%/PhotoTool/logs/`，包含 `desktop.log` 和 `sidecar.log`。Sidecar 日志目录不可写时会尝试临时目录等备用位置。

@@ -33,8 +33,11 @@ def run_desktop(port: int = 8765) -> int:
     server_thread = threading.Thread(target=serve, kwargs={"port": port}, daemon=True)
     server_thread.start()
     _wait_for_port("127.0.0.1", port)
+    # PyWebView disables downloads by default. Enable its native save dialog
+    # for the data URLs emitted by Reflex after conversion and icon generation.
+    webview.settings["ALLOW_DOWNLOADS"] = True
     webview.create_window(
-        "PhotoTool · 企业级图片处理工作台",
+        "PhotoTool · 个人图片处理工作台",
         f"http://127.0.0.1:{port}/",
         width=DEFAULT_WIDTH,
         height=DEFAULT_HEIGHT,

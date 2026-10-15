@@ -1,4 +1,4 @@
-"""Enterprise-style Reflex user interface for PhotoTool."""
+"""Personal Reflex user interface for PhotoTool."""
 
 import reflex as rx
 
@@ -454,4 +454,4 @@ app = rx.App(
     theme=rx.theme(appearance="light", accent_color="blue", gray_color="slate", radius="large"),
     stylesheets=["/styles.css"],
 )
-app.add_page(index, route="/", title="PhotoTool · 企业级图片处理工作台")
+app.add_page(index, route="/", title="PhotoTool · 个人图片处理工作台")

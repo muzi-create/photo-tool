@@ -9,7 +9,10 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_UI_Controls_Dialogs"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

@@ -6,7 +6,7 @@ ImageConverter - 图片格式转换、质量压缩和尺寸缩放工具类
 from pathlib import Path
 from typing import Tuple, Optional, Union, List, Dict
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 
 class ImageConverter:
@@ -20,7 +20,7 @@ class ImageConverter:
         'BMP': {'ext': '.bmp', 'default_quality': 100},
     }
 
-    # 企业级图标尺寸预设
+    # 个人图标尺寸预设
     ICON_PRESETS = {
         'windows': [16, 32, 48, 256],  # Windows 系统图标
         'ios': [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024],  # iOS 应用图标
@@ -474,7 +474,7 @@ class ImageConverter:
             {'radius': 0.5, 'percent': 150, 'threshold': 2}  # 默认参数
         )
 
-        sharpened = image.filter(Image.Filter.UnsharpMask(
+        sharpened = image.filter(ImageFilter.UnsharpMask(
             radius=sharpen_config['radius'],
             percent=sharpen_config['percent'],
             threshold=sharpen_config['threshold']

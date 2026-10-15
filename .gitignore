@@ -1,26 +1,34 @@
-.states
-.web
-*.db
-assets/external/
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 *.egg-info/
-dist/
-build/
 *.egg
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Reflex runtime and frontend
 .web/
 .states/
-.spec/
-src-tauri/target/
-node_modules/
+uploaded_files/
+assets/external/
+*.db
 
 # Virtual environments
 myenv/
 venv/
+.venv/
 .env/
+
+# Build outputs and generated dependencies
+build/
+dist/
+node_modules/
+src-tauri/target/
+src-tauri/gen/
 
 # Editors
 .idea/

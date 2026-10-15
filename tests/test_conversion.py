@@ -99,6 +99,37 @@ class ImageConversionServiceTests(unittest.TestCase):
 
 
 class ImageConverterIconTests(unittest.TestCase):
+    def test_generates_small_png_icons_with_transparency(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "source.png"
+            Image.new("RGBA", (64, 64), (23, 105, 224, 128)).save(source_path)
+
+            with ImageConverter(source_path) as converter:
+                for size in (16, 24, 32):
+                    with self.subTest(size=size):
+                        output_path = root / f"icon_{size}.png"
+                        converter.generate_icon(output_path, size=size)
+
+                        with Image.open(output_path) as icon:
+                            self.assertEqual(icon.format, "PNG")
+                            self.assertEqual(icon.size, (size, size))
+                            self.assertEqual(icon.mode, "RGBA")
+                            self.assertEqual(icon.getpixel((0, 0))[3], 128)
+
+    def test_generates_ico_with_only_small_sizes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "source.png"
+            output_path = root / "small.ico"
+            Image.new("RGBA", (64, 64), (23, 105, 224, 255)).save(source_path)
+
+            with ImageConverter(source_path) as converter:
+                converter.generate_multi_size_ico(output_path, [16, 32])
+
+            with Image.open(output_path) as icon:
+                self.assertEqual(icon.ico.sizes(), {(16, 16), (32, 32)})
+
     def test_generates_multi_size_ico(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

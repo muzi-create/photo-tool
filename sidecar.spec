@@ -23,7 +23,6 @@ hidden = [
         "reflex.components.component", "reflex.components.base.meta", "reflex.vars", "reflex.vars.base",
         "phototool.phototool", "phototool.web_state", "phototool.core",
         "phototool.core.conversion", "phototool.core.image_converter", "phototool.sidecar",
-        "phototool.sidecar", "phototool.phototool", "phototool.web_state",
         "uvicorn.loops.asyncio", "uvicorn.protocols.http.h11_impl",
         "uvicorn.protocols.websockets.websockets_impl",
     ]
