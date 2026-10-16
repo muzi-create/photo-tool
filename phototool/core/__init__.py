@@ -1,6 +1,7 @@
 """核心业务逻辑模块"""
 
 from .image_converter import ImageConverter
+from .text_annotations import TextBoxOptions
 from .conversion import (
     ConversionOptions,
     CropOptions,
@@ -16,4 +17,5 @@ __all__ = [
     "ImageConversionService",
     "ResizeOptions",
     "TransformOptions",
+    "TextBoxOptions",
 ]

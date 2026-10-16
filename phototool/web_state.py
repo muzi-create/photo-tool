@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass, field, replace
 import io
+import json
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 import reflex as rx
 from PIL import Image
@@ -18,7 +21,9 @@ from phototool.core import (
     ImageConversionService,
     ResizeOptions,
     TransformOptions,
+    TextBoxOptions,
 )
+from phototool.core.text_annotations import render_text_box, text_box_position, text_box_preview_layout
 
 
 ICON_PRESETS = {
@@ -89,6 +94,27 @@ def _rotate_preview(image: Image.Image, angle: int) -> Image.Image:
     return image.rotate(-angle, expand=True, resample=Image.Resampling.BICUBIC)
 
 
+@dataclass
+class TextAnnotation:
+    """Editable annotation and its Pillow-rendered preview tile."""
+
+    id: str
+    text: str = "请输入文字说明"
+    x: float = 10.0
+    y: float = 10.0
+    width: float = 45.0
+    font_size: int = 36
+    color: str = "#ffffff"
+    background: str = "#000000"
+    opacity: int = 65
+    bold: bool = False
+    align: str = "left"
+    preview_url: str = ""
+    style: dict[str, str] = field(default_factory=dict)
+    height: float | None = None
+    preview_layout: str = ""
+
+
 class PhotoToolState(rx.State):
     """Session state for the Reflex UI."""
 
@@ -123,6 +149,20 @@ class PhotoToolState(rx.State):
     crop_pixel_h: int = 1080
     crop_history_count: int = 0
 
+    text_boxes: list[TextAnnotation] = rx.field(default_factory=list)
+    text_selected_id: str = ""
+    text_content: str = ""
+    text_font_size: int = 36
+    text_color: str = "#ffffff"
+    text_background: str = "#000000"
+    text_opacity: int = 65
+    text_bold: bool = False
+    text_align: str = "left"
+    text_width: float = 45.0
+    text_height: float = 0.0
+    text_x: float = 10.0
+    text_y: float = 10.0
+
     icon_file_name: str = "未选择图片"
     icon_meta: str = "选择一张高清正方形图片以获得最佳效果"
     icon_preview_url: str = ""
@@ -153,6 +193,10 @@ class PhotoToolState(rx.State):
     @rx.var
     def has_icon_file(self) -> bool:
         return bool(self.icon_preview_url)
+
+    @rx.var
+    def has_selected_text(self) -> bool:
+        return any(box.id == self.text_selected_id for box in self.text_boxes)
 
     @rx.var
     def transform_status(self) -> str:
@@ -264,6 +308,9 @@ class PhotoToolState(rx.State):
         self.crop_w = 100.0
         self.crop_h = 100.0
         self.crop_history_count = 0
+        self.text_boxes = []
+        self.text_selected_id = ""
+        self.text_content = ""
 
     def _load_primary_preview(self):
         if not self._files:
@@ -286,6 +333,178 @@ class PhotoToolState(rx.State):
         self.preview_url = _data_url(preview_data, preview_mime)
         rendered.close()
         self._sync_crop_pixels()
+        self._refresh_text_previews()
+
+    def _text_canvas_size(self) -> tuple[int, int]:
+        if self.rotation % 180:
+            return max(1, self.image_height), max(1, self.image_width)
+        return max(1, self.image_width), max(1, self.image_height)
+
+    def _text_options(self, box: TextAnnotation) -> TextBoxOptions:
+        return TextBoxOptions(
+            text=box.text, x=box.x / 100, y=box.y / 100, width=box.width / 100,
+            font_size=min(1.0, box.font_size / self._text_canvas_size()[0]),
+            color=box.color, background=box.background, opacity=box.opacity,
+            bold=box.bold, align=box.align,
+            height=box.height / 100 if box.height is not None else None,
+        )
+
+    def _render_text_preview(self, box: TextAnnotation) -> TextAnnotation:
+        canvas_size = self._text_canvas_size()
+        options = self._text_options(box)
+        with render_text_box(options, canvas_size) as tile:
+            layout = text_box_preview_layout(options, canvas_size)
+            layout.update(width=tile.width, height=tile.height,
+                          previewScale=min(1.0, _PREVIEW_MAXIMUM / max(canvas_size)))
+            left, top = text_box_position(options, canvas_size, tile.size)
+            style = {
+                "left": f"{left / canvas_size[0] * 100}%",
+                "top": f"{top / canvas_size[1] * 100}%",
+                "width": f"{tile.width / canvas_size[0] * 100}%",
+                "height": f"{tile.height / canvas_size[1] * 100}%",
+            }
+            maximum = max(canvas_size)
+            if maximum > _PREVIEW_MAXIMUM:
+                tile.thumbnail((max(1, round(tile.width * _PREVIEW_MAXIMUM / maximum)),
+                                max(1, round(tile.height * _PREVIEW_MAXIMUM / maximum))), Image.Resampling.LANCZOS)
+            buffer = io.BytesIO()
+            tile.save(buffer, format="PNG")
+        return replace(box, x=left / canvas_size[0] * 100, y=top / canvas_size[1] * 100,
+                       preview_url=_data_url(buffer.getvalue()), style=style,
+                       preview_layout=json.dumps(layout))
+
+    def _refresh_text_previews(self):
+        self.text_boxes = [self._render_text_preview(box) for box in self.text_boxes]
+        self._sync_text_controls()
+
+    def _sync_text_controls(self):
+        box = next((box for box in self.text_boxes if box.id == self.text_selected_id), None)
+        if box is None:
+            return
+        self.text_content, self.text_font_size = box.text, box.font_size
+        self.text_color, self.text_background = box.color, box.background
+        self.text_opacity, self.text_bold, self.text_align = box.opacity, box.bold, box.align
+        self.text_width = round(float(box.style["width"].removesuffix("%")), 2)
+        self.text_x, self.text_y = round(box.x, 2), round(box.y, 2)
+        self.text_height = round(float(box.style["height"].removesuffix("%")), 2)
+
+    def add_text_box(self):
+        if not self._files:
+            return rx.toast.warning("请先添加图片")
+        if len(self.text_boxes) >= 20:
+            return rx.toast.warning("最多可添加 20 个文字说明框")
+        offset = (len(self.text_boxes) % 6) * 5
+        box = TextAnnotation(
+            id=uuid4().hex, x=10 + offset, y=10 + offset,
+            font_size=max(1, min(72, round(self._text_canvas_size()[0] * 0.04))),
+        )
+        self.text_boxes = [*self.text_boxes, self._render_text_preview(box)]
+        self.text_selected_id = box.id
+        self.crop_enabled = False
+        self._sync_text_controls()
+        self.status = "已添加文字说明框，可拖动移动或调整大小"
+
+    def select_text_box(self, box_id: str):
+        if any(box.id == box_id for box in self.text_boxes):
+            self.text_selected_id = box_id
+            self.crop_enabled = False
+            self._sync_text_controls()
+
+    def delete_text_box(self):
+        self.text_boxes = [box for box in self.text_boxes if box.id != self.text_selected_id]
+        self.text_selected_id = self.text_boxes[-1].id if self.text_boxes else ""
+        self._sync_text_controls()
+
+    def _update_text_box(self, box_id: str = "", **updates):
+        target_id = box_id or self.text_selected_id
+        self.text_boxes = [
+            self._render_text_preview(replace(box, **updates)) if box.id == target_id else box
+            for box in self.text_boxes
+        ]
+        self._sync_text_controls()
+
+    def change_text_content(self, value: str, box_id: str = ""):
+        self._update_text_box(box_id, text=value[:2000])
+
+    def change_text_font_size(self, value: str, box_id: str = ""):
+        try:
+            size = max(1, min(500, int(value or 1)))
+        except ValueError:
+            return
+        self._update_text_box(box_id, font_size=size)
+
+    def change_text_color(self, value: str, box_id: str = ""):
+        if len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]):
+            self._update_text_box(box_id, color=value)
+
+    def change_text_background(self, value: str, box_id: str = ""):
+        if len(value) == 7 and value.startswith("#") and all(c in "0123456789abcdefABCDEF" for c in value[1:]):
+            self._update_text_box(box_id, background=value)
+
+    def change_text_opacity(self, value: float, box_id: str = ""):
+        try:
+            opacity = max(0, min(100, round(float(value or 0))))
+        except (ValueError, OverflowError):
+            return
+        self._update_text_box(box_id, opacity=opacity)
+
+    def change_text_bold(self, value: bool, box_id: str = ""):
+        self._update_text_box(box_id, bold=value)
+
+    def change_text_align(self, value: str, box_id: str = ""):
+        if value in {"left", "center", "right"}:
+            self._update_text_box(box_id, align=value)
+
+    def change_text_width(self, value: str, box_id: str = ""):
+        self._change_text_percentage("width", value, 5, box_id)
+
+    def change_text_height(self, value: str, box_id: str = ""):
+        self._change_text_percentage("height", value, 3, box_id)
+
+    def auto_text_height(self, box_id: str):
+        self._update_text_box(box_id, height=None)
+
+    def change_text_x(self, value: str, box_id: str = ""):
+        self._change_text_percentage("x", value, box_id=box_id)
+
+    def change_text_y(self, value: str, box_id: str = ""):
+        self._change_text_percentage("y", value, box_id=box_id)
+
+    def _change_text_percentage(self, key: str, value: str, minimum: float = 0, box_id: str = ""):
+        try:
+            number = float(value or minimum)
+            if not 0 <= number <= 100:
+                return
+        except ValueError:
+            return
+        updates = {key: max(minimum, number)}
+        if key == "height":
+            target_id = box_id or self.text_selected_id
+            box = next((box for box in self.text_boxes if box.id == target_id), None)
+            if box is not None and box.height is None:
+                updates["width"] = float(box.style["width"].removesuffix("%"))
+        self._update_text_box(box_id, **updates)
+
+    def move_text_box(self, value: str):
+        """Commit a move or resize in one update so coordinates stay consistent."""
+        try:
+            payload = json.loads(value)
+            box_id = payload["id"]
+            x, y = float(payload["x"]), float(payload["y"])
+            if not 0 <= x <= 100 or not 0 <= y <= 100:
+                return
+            updates = {"x": x, "y": y}
+            if "width" in payload or "height" in payload:
+                width, height = float(payload["width"]), float(payload["height"])
+                if not 5 <= width <= 100 or not 3 <= height <= 100:
+                    return
+                updates.update(width=width, height=height)
+        except (ValueError, TypeError, KeyError):
+            return
+        if not any(box.id == box_id for box in self.text_boxes):
+            return
+        self.text_selected_id = box_id
+        self._update_text_box(**updates)
 
     def _update_file_meta(self):
         self.file_count = len(self._files)
@@ -343,6 +562,8 @@ class PhotoToolState(rx.State):
 
     def toggle_crop(self, enabled: bool):
         self.crop_enabled = enabled
+        if enabled:
+            self.text_selected_id = ""
         if enabled and self.crop_w <= 0:
             self.reset_crop_selection()
 
@@ -499,6 +720,7 @@ class PhotoToolState(rx.State):
             resize=ResizeOptions(self.resize_enabled, self.resize_width, self.resize_height, self.keep_ratio),
             transform=TransformOptions(self.rotation, self.flip_h, self.flip_v),
             crop=CropOptions(crop),
+            text_boxes=tuple(self._text_options(box) for box in self.text_boxes),
         )
 
     def convert_images(self):
@@ -506,7 +728,7 @@ class PhotoToolState(rx.State):
             return rx.toast.warning("请先添加图片")
         self.processing = True
         self.progress = 8
-        self.status = "正在转换图片…"
+        self.status = "正在导出编辑后的图片…"
         try:
             options = self._conversion_options()
             results: list[tuple[str, bytes]] = []
@@ -526,16 +748,16 @@ class PhotoToolState(rx.State):
                 results.append((f"{Path(name).stem}{extension}", output.getvalue()))
                 self.progress = round((index + 1) / len(self._files) * 90)
             self.progress = 100
-            self.status = f"转换完成 · {len(results)} 个文件"
+            self.status = f"编辑完成 · {len(results)} 个文件"
             if len(results) == 1:
                 return rx.download(data=results[0][1], filename=results[0][0])
             archive = io.BytesIO()
             with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
                 for name, data in results:
                     bundle.writestr(name, data)
-            return rx.download(data=archive.getvalue(), filename="PhotoTool_转换结果.zip")
+            return rx.download(data=archive.getvalue(), filename="PhotoTool_编辑结果.zip")
         except Exception as exc:
-            self.status = f"转换失败：{exc}"
+            self.status = f"编辑失败：{exc}"
             return rx.toast.error(self.status)
         finally:
             self.processing = False

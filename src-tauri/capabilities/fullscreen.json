@@ -1,0 +1,12 @@
+{
+  "identifier": "main-fullscreen",
+  "description": "Allow the main window's fullscreen shortcuts on local PhotoTool pages.",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:3000"]
+  },
+  "permissions": [
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-set-fullscreen"
+  ]
+}

@@ -6,6 +6,8 @@ from typing import Optional, Tuple, Union
 
 from PIL import Image
 
+from .text_annotations import TextBoxOptions, apply_text_boxes
+
 
 PathLike = Union[str, Path]
 CropRect = Tuple[float, float, float, float]
@@ -59,6 +61,7 @@ class ConversionOptions:
     resize: ResizeOptions = field(default_factory=ResizeOptions)
     transform: TransformOptions = field(default_factory=TransformOptions)
     crop: CropOptions = field(default_factory=CropOptions)
+    text_boxes: tuple[TextBoxOptions, ...] = ()
 
     def __post_init__(self) -> None:
         normalized_format = self.output_format.upper()
@@ -113,10 +116,33 @@ class ImageConversionService:
     ) -> Image.Image:
         """Return a transformed copy, leaving the supplied image untouched."""
         result = image.copy()
+        text_canvas, text_origin = cls._text_viewport(image.size, options)
         result = cls._crop(result, options.crop)
         result = cls._transform(result, options.transform)
+        if options.transform.angle % 90:
+            text_canvas, text_origin = result.size, (0, 0)
+        result = apply_text_boxes(result, options.text_boxes, text_canvas, text_origin)
         result = cls._resize(result, options.resize)
         return cls._prepare_mode(result, options.output_format)
+
+    @staticmethod
+    def _text_viewport(size: tuple[int, int], options: ConversionOptions) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Locate a cropped image within the full, rotated preview canvas."""
+        width, height = size
+        x1, y1, x2, y2 = options.crop.rect or (0, 0, 1, 1)
+        left, top, right, bottom = int(x1 * width), int(y1 * height), int(x2 * width), int(y2 * height)
+        if options.transform.flip_horizontal:
+            left, right = width - right, width - left
+        if options.transform.flip_vertical:
+            top, bottom = height - bottom, height - top
+        angle = options.transform.angle % 360
+        if angle == 90:
+            return (height, width), (height - bottom, left)
+        if angle == 180:
+            return size, (width - right, height - bottom)
+        if angle == 270:
+            return (height, width), (top, width - right)
+        return size, (left, top)
 
     @staticmethod
     def _crop(image: Image.Image, options: CropOptions) -> Image.Image:

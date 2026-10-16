@@ -19,6 +19,7 @@
         "title": "PhotoTool · 个人图片处理工作台",
         "width": 1440,
         "height": 920,
+        "fullscreen": true,
         "minWidth": 1100,
         "minHeight": 720,
         "resizable": true,

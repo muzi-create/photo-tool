@@ -2,10 +2,13 @@
 
 面向个人的本地图片处理工具，基于 Reflex、Pillow 和 Tauri 开发。支持浏览器开发、Python 原生窗口预览和 Windows 安装包；图片由本机 Python 服务处理。
 
+版本更新与变化见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 功能
 
-- 将图片转换为 JPEG、PNG、WEBP、BMP；多张图片自动打包为 ZIP。
+- 编辑图片并导出为 JPEG、PNG、WEBP、BMP；多张图片自动打包为 ZIP。
 - 调整输出质量、尺寸和宽高比，支持旋转、翻转、裁剪、撤销裁剪及恢复原图。
+- 在图片上添加多个文字说明框，支持中文、换行、拖动定位和边角调整大小、字号、加粗、对齐、文字/背景颜色及透明背景；导出时将文字合成到图片中。
 - 生成 Windows、iOS、Android、Favicon 等预设图标，支持自定义尺寸、多尺寸 ICO、PNG 和 ZIP。
 - 为图标添加圆形或圆角矩形遮罩；圆形半径自动取各输出尺寸的一半。
 - 桌面版生成结果后弹出保存窗口；浏览器版遵循浏览器的下载设置。
@@ -120,7 +123,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_tauri.ps1
 src-tauri/target/release/bundle/nsis/PhotoTool_1.0.0_x64-setup.exe
 ```
 
-版本号随 `src-tauri/tauri.conf.json` 的 `version` 变化。双击安装后，从开始菜单或安装目录中的 `phototool-desktop.exe` 启动。窗口默认 1440 × 920，最小 1100 × 720。
+版本号随 `src-tauri/tauri.conf.json` 的 `version` 变化。双击安装后，从开始菜单或安装目录中的 `phototool-desktop.exe` 启动。桌面版和 Python 原生窗口预览均默认全屏打开；按 `F11` 切换全屏，按 `Esc` 返回普通窗口。普通窗口默认 1440 × 920，最小 1100 × 720。
 
 `PhotoToolSidecar.exe` 是窗口自动调用的后台服务，直接双击不会显示界面。修改源码后，需要重新打包并安装才能更新已安装的软件。
 
@@ -146,6 +149,7 @@ src-tauri/target/release/bundle/nsis/PhotoTool_1.0.0_x64-setup.exe
 
 ```powershell
 python -m unittest discover -s tests -v
+node --test tests/test_text_interactions.js
 node --check assets/crop_interactions.js
 ```
 

@@ -2,7 +2,7 @@
 
 import reflex as rx
 
-from phototool.web_state import ICON_PRESETS, PhotoToolState
+from phototool.web_state import ICON_PRESETS, PhotoToolState, TextAnnotation
 
 
 BLUE = "#1769e0"
@@ -46,7 +46,7 @@ def settings_section(icon: str, title: str, *children: rx.Component) -> rx.Compo
     return rx.el.details(
         rx.el.summary(section_title(icon, title), class_name="settings-summary"),
         rx.vstack(*children, spacing="4", width="100%", class_name="settings-body"),
-        open=True,
+        open=False,
         class_name="settings-section",
     )
 
@@ -103,6 +103,33 @@ def crop_overlay() -> rx.Component:
     )
 
 
+def text_overlay() -> rx.Component:
+    def annotation(box: TextAnnotation) -> rx.Component:
+        return rx.el.button(
+            rx.image(src=box.preview_url, alt=box.text, draggable=False, class_name="text-box-image"),
+            *[
+                rx.el.span(
+                    class_name=f"text-resize-handle text-resize-{position}",
+                    custom_attrs={"data-text-handle": position, "aria-hidden": "true"},
+                )
+                for position in ("nw", "n", "ne", "e", "se", "s", "sw", "w")
+            ],
+            type="button",
+            on_click=PhotoToolState.select_text_box(box.id),
+            class_name=rx.cond(
+                PhotoToolState.text_selected_id == box.id,
+                "text-annotation text-annotation-selected", "text-annotation",
+            ),
+            custom_attrs={"data-text-id": box.id, "data-text-layout": box.preview_layout,
+                          "aria-label": "选择文字说明框", "style": box.style},
+        )
+
+    return rx.box(
+        rx.foreach(PhotoToolState.text_boxes, annotation),
+        class_name="text-overlay",
+    )
+
+
 def image_preview() -> rx.Component:
     return rx.section(
         rx.hstack(
@@ -130,13 +157,14 @@ def image_preview() -> rx.Component:
                 rx.box(
                     rx.box(
                         rx.image(src=PhotoToolState.preview_url, alt="图片预览", class_name="preview-image"),
+                        text_overlay(),
                         crop_overlay(),
                         id="crop-stage",
                         class_name="crop-stage",
                     ),
                     class_name="preview-canvas",
                 ),
-                empty_upload("convert_upload", PhotoToolState.handle_upload, "拖放图片到这里", "支持单张或批量上传，最大程度保留原图质量"),
+                empty_upload("convert_upload", PhotoToolState.handle_upload, "拖放图片到这里", "支持单张上传，最大程度保留原图质量"),
             ),
             class_name="preview-workspace",
         ),
@@ -242,6 +270,85 @@ def crop_controls() -> rx.Component:
     )
 
 
+def text_controls() -> rx.Component:
+    # Bind edits to their box so a delayed input event cannot edit a new selection.
+    def edit(handler):
+        return lambda value: handler(value, PhotoToolState.text_selected_id)
+
+    return rx.vstack(
+        rx.button(
+            app_icon("plus", 16), "添加文字说明框",
+            on_click=PhotoToolState.add_text_box,
+            disabled=~PhotoToolState.has_files | (PhotoToolState.text_boxes.length() >= 20),
+            class_name="button-secondary", width="100%",
+        ),
+        rx.text("拖动说明框内部可移动，拖动任意边框或角点可调整大小；批量导出时应用到所有图片。", class_name="field-hint"),
+        rx.flex(
+            rx.foreach(
+                PhotoToolState.text_boxes,
+                lambda box, index: rx.button(
+                    "文字 ", index + 1,
+                    on_click=PhotoToolState.select_text_box(box.id),
+                    class_name=rx.cond(PhotoToolState.text_selected_id == box.id, "tool-button tool-button-active", "tool-button"),
+                ),
+            ),
+            gap="2", wrap="wrap", width="100%",
+        ),
+        rx.cond(
+            PhotoToolState.has_selected_text,
+            rx.vstack(
+                field("文字内容", rx.text_area(
+                    value=PhotoToolState.text_content, on_change=edit(PhotoToolState.change_text_content),
+                    placeholder="输入文字说明，支持换行", max_length=2000, rows="4",
+                    class_name="text-content-input", width="100%",
+                ), "最多 2000 字"),
+                rx.grid(
+                    field("字号 (px)", number_input(PhotoToolState.text_font_size, edit(PhotoToolState.change_text_font_size), 1, 500)),
+                    field("说明框宽度 (%)", number_input(PhotoToolState.text_width, edit(PhotoToolState.change_text_width), 5, 100)),
+                    columns="2", spacing="3", width="100%",
+                ),
+                rx.grid(
+                    field("说明框高度 (%)", number_input(PhotoToolState.text_height, edit(PhotoToolState.change_text_height), 3, 100)),
+                    field("尺寸模式", rx.button("自动适应文字", on_click=PhotoToolState.auto_text_height(PhotoToolState.text_selected_id), class_name="button-secondary compact", width="100%")),
+                    columns="2", spacing="3", width="100%",
+                ),
+                rx.grid(
+                    field("水平位置 (%)", number_input(PhotoToolState.text_x, edit(PhotoToolState.change_text_x), 0, 100)),
+                    field("垂直位置 (%)", number_input(PhotoToolState.text_y, edit(PhotoToolState.change_text_y), 0, 100)),
+                    columns="2", spacing="3", width="100%",
+                ),
+                rx.grid(
+                    field("文字颜色", rx.el.input(type="color", value=PhotoToolState.text_color, on_change=edit(PhotoToolState.change_text_color), class_name="text-color-input", aria_label="文字颜色")),
+                    field("背景颜色", rx.el.input(type="color", value=PhotoToolState.text_background, on_change=edit(PhotoToolState.change_text_background), class_name="text-color-input", aria_label="说明框背景颜色")),
+                    columns="2", spacing="3", width="100%",
+                ),
+                field("背景不透明度", rx.hstack(
+                    rx.el.input(type="range", value=PhotoToolState.text_opacity, min="0", max="100", on_change=edit(PhotoToolState.change_text_opacity), class_name="quality-range", aria_label="背景不透明度"),
+                    rx.text(PhotoToolState.text_opacity, "%", class_name="field-hint"),
+                    width="100%", align="center",
+                ), "0% 为透明"),
+                field("文字对齐", rx.select.root(
+                    rx.select.trigger(width="100%"),
+                    rx.select.content(
+                        rx.select.item("左对齐", value="left"),
+                        rx.select.item("居中", value="center"),
+                        rx.select.item("右对齐", value="right"),
+                    ),
+                    value=PhotoToolState.text_align, on_change=edit(PhotoToolState.change_text_align),
+                )),
+                rx.hstack(
+                    rx.hstack(rx.text("加粗", class_name="field-label"), rx.switch(checked=PhotoToolState.text_bold, on_change=edit(PhotoToolState.change_text_bold)), align="center", spacing="2"),
+                    rx.button(app_icon("trash-2", 14), "删除说明框", on_click=PhotoToolState.delete_text_box, class_name="button-ghost compact"),
+                    justify="between", width="100%", align="center",
+                ),
+                rx.text("调整宽度会自动换行，字号保持不变；超出说明框高度的文字会被裁切。", class_name="field-hint"),
+                spacing="4", width="100%", key=PhotoToolState.text_selected_id,
+            ),
+        ),
+        spacing="3", width="100%",
+    )
+
+
 def conversion_settings() -> rx.Component:
     return rx.section(
         rx.hstack(
@@ -289,13 +396,14 @@ def conversion_settings() -> rx.Component:
                 ),
                 rx.hstack(rx.text(PhotoToolState.transform_status, class_name="selection-summary"), rx.button("重置变换", on_click=PhotoToolState.reset_transform, class_name="link-button"), justify="between", width="100%"),
             ),
+            settings_section("type", "文字说明", text_controls()),
             settings_section("crop", "裁剪设置", crop_controls()),
             class_name="settings-scroll",
         ),
         rx.box(
             rx.button(
                 rx.cond(PhotoToolState.processing, rx.spinner(size="2"), app_icon("sparkles", 18)),
-                rx.cond(PhotoToolState.file_count > 1, rx.text("批量转换并下载"), rx.text("开始转换并下载")),
+                rx.cond(PhotoToolState.file_count > 1, rx.text("批量保存并下载"), rx.text("保存编辑并下载")),
                 on_click=PhotoToolState.convert_images,
                 disabled=(PhotoToolState.file_count == 0) | PhotoToolState.processing,
                 class_name="button-primary action-button",
@@ -307,7 +415,7 @@ def conversion_settings() -> rx.Component:
 
 
 def convert_page() -> rx.Component:
-    return rx.grid(image_preview(), conversion_settings(), columns=rx.breakpoints(initial="1", lg="5fr 3fr"), spacing="5", width="100%", class_name="workspace-grid")
+    return rx.grid(image_preview(), conversion_settings(), width="100%", class_name="workspace-grid")
 
 
 def icon_preview_panel() -> rx.Component:
@@ -322,8 +430,8 @@ def icon_preview_panel() -> rx.Component:
                 PhotoToolState.has_icon_file,
                 rx.vstack(
                     rx.box(rx.image(src=PhotoToolState.icon_preview_url, class_name="icon-source-preview"), class_name="icon-preview-checker"),
-                    rx.hstack(rx.center(rx.image(src=PhotoToolState.corner_preview_url, class_name="corner-preview-image"), class_name="corner-preview-tile"), rx.vstack(rx.text("输出效果预览", class_name="field-label"), rx.text("自动居中裁切并保留透明通道", class_name="panel-subtitle"), align="start", spacing="1"), spacing="3", align="center"),
-                    spacing="5", align="center",
+                    rx.hstack(rx.center(rx.image(src=PhotoToolState.corner_preview_url, class_name="corner-preview-image"), class_name="corner-preview-tile"), rx.vstack(rx.text("输出效果预览", class_name="field-label"), rx.text("自动居中裁切并保留透明通道", class_name="panel-subtitle"), align="start", spacing="1"), spacing="3", align="center", class_name="icon-preview-caption"),
+                    spacing="5", align="center", class_name="icon-preview-content",
                 ),
                 empty_upload("icon_upload", PhotoToolState.handle_icon_upload, "上传图标源图", "建议使用 1024 × 1024 px 的 PNG 图片"),
             ),
@@ -403,13 +511,15 @@ def icon_settings() -> rx.Component:
 
 
 def icon_page() -> rx.Component:
-    return rx.grid(icon_preview_panel(), icon_settings(), columns=rx.breakpoints(initial="1", lg="5fr 3fr"), spacing="5", width="100%", class_name="workspace-grid")
+    return rx.grid(icon_preview_panel(), icon_settings(), width="100%", class_name="workspace-grid")
 
 
 def sidebar_item(icon: str, label: str, mode: str) -> rx.Component:
     return rx.button(
-        app_icon(icon, 21), rx.text(label),
+        app_icon(icon, 19), rx.text(label, class_name="nav-label"),
         on_click=PhotoToolState.switch_mode(mode),
+        title=label,
+        aria_label=label,
         class_name=rx.cond(PhotoToolState.active_mode == mode, "nav-item nav-item-active", "nav-item"),
     )
 
@@ -417,7 +527,7 @@ def sidebar_item(icon: str, label: str, mode: str) -> rx.Component:
 def sidebar() -> rx.Component:
     return rx.el.aside(
         rx.hstack(rx.center(rx.text("PT", class_name="logo-mark"), class_name="logo-box"), rx.vstack(rx.text("PhotoTool", class_name="brand-name"), rx.text("IMAGE STUDIO", class_name="brand-kicker"), spacing="0", align="start"), spacing="3", class_name="brand"),
-        rx.vstack(sidebar_item("images", "图片转换", "convert"), sidebar_item("app-window", "图标生成", "icon"), spacing="2", width="100%", class_name="nav-list"),
+        rx.vstack(sidebar_item("images", "图片编辑", "convert"), sidebar_item("app-window", "图标生成", "icon"), spacing="2", width="100%", class_name="nav-list"),
         rx.spacer(),
         rx.box(rx.hstack(rx.center(app_icon("shield-check", 16), class_name="security-icon"), rx.vstack(rx.text("本地处理", class_name="security-title"), rx.text("文件不会上传云端", class_name="security-copy"), spacing="0", align="start"), spacing="3"), class_name="security-card"),
         class_name="sidebar",
@@ -427,8 +537,8 @@ def sidebar() -> rx.Component:
 def topbar() -> rx.Component:
     return rx.el.header(
         rx.vstack(
-            rx.text(rx.cond(PhotoToolState.active_mode == "convert", "图片转换工作台", "应用图标生成器"), class_name="page-title"),
-            rx.text(rx.cond(PhotoToolState.active_mode == "convert", "专业、可靠的图片格式转换与编辑工具", "面向多平台的一站式高质量图标输出"), class_name="page-subtitle"),
+            rx.text(rx.cond(PhotoToolState.active_mode == "convert", "图片编辑工作台", "应用图标生成器"), class_name="page-title"),
+            rx.text(rx.cond(PhotoToolState.active_mode == "convert", "专业、可靠的图片编辑与导出工具", "面向多平台的一站式高质量图标输出"), class_name="page-subtitle"),
             spacing="0", align="start",
         ),
         rx.hstack(rx.badge(rx.icon("circle-check", size=14), PhotoToolState.status, color_scheme="blue", variant="soft", size="2"), rx.button(app_icon("circle-help", 17), "帮助", class_name="button-ghost"), spacing="3", align="center"),
@@ -438,7 +548,7 @@ def topbar() -> rx.Component:
 
 def index() -> rx.Component:
     return rx.box(
-        rx.script(src="/crop_interactions.js"),
+        rx.el.input(id="text-box-sync", type="text", default_value="", on_change=PhotoToolState.move_text_box, class_name="crop-sync-input", tab_index=-1, aria_hidden="true"),
         sidebar(),
         rx.box(
             topbar(),
@@ -453,5 +563,9 @@ def index() -> rx.Component:
 app = rx.App(
     theme=rx.theme(appearance="light", accent_color="blue", gray_color="slate", radius="large"),
     stylesheets=["/styles.css"],
+    head_components=[
+        rx.el.script(src="/crop_interactions.js", defer=True),
+        rx.el.script(src="/text_interactions.js?v=resize-padding-5", defer=True),
+    ],
 )
 app.add_page(index, route="/", title="PhotoTool · 个人图片处理工作台")

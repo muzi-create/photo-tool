@@ -76,6 +76,7 @@ fn main() {
                 app,
                 &app.config().app.windows[0],
             )?
+            .initialization_script(include_str!("../../assets/desktop_window.js"))
             .on_download(downloads::handle_download)
             .build()?;
             tray::setup(app)?;
