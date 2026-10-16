@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from phototool import __version__
 from phototool.web_state import ICON_PRESETS, PhotoToolState, TextAnnotation
 
 
@@ -526,7 +527,7 @@ def sidebar_item(icon: str, label: str, mode: str) -> rx.Component:
 
 def sidebar() -> rx.Component:
     return rx.el.aside(
-        rx.hstack(rx.center(rx.text("PT", class_name="logo-mark"), class_name="logo-box"), rx.vstack(rx.text("PhotoTool", class_name="brand-name"), rx.text("IMAGE STUDIO", class_name="brand-kicker"), spacing="0", align="start"), spacing="3", class_name="brand"),
+        rx.hstack(rx.center(rx.text("PT", class_name="logo-mark"), class_name="logo-box"), rx.vstack(rx.text("PhotoTool", class_name="brand-name"), rx.text(f"v{__version__}", class_name="brand-kicker"), spacing="0", align="start"), spacing="3", class_name="brand"),
         rx.vstack(sidebar_item("images", "图片编辑", "convert"), sidebar_item("app-window", "图标生成", "icon"), spacing="2", width="100%", class_name="nav-list"),
         rx.spacer(),
         rx.box(rx.hstack(rx.center(app_icon("shield-check", 16), class_name="security-icon"), rx.vstack(rx.text("本地处理", class_name="security-title"), rx.text("文件不会上传云端", class_name="security-copy"), spacing="0", align="start"), spacing="3"), class_name="security-card"),
@@ -568,4 +569,4 @@ app = rx.App(
         rx.el.script(src="/text_interactions.js?v=resize-padding-5", defer=True),
     ],
 )
-app.add_page(index, route="/", title="PhotoTool · 个人图片处理工作台")
+app.add_page(index, route="/", title=f"PhotoTool v{__version__} · 个人图片处理工作台")

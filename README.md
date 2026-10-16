@@ -2,7 +2,7 @@
 
 面向个人的本地图片处理工具，基于 Reflex、Pillow 和 Tauri 开发。支持浏览器开发、Python 原生窗口预览和 Windows 安装包；图片由本机 Python 服务处理。
 
-版本更新与变化见 [CHANGELOG.md](CHANGELOG.md)。
+当前开发版本：`v1.1.0`。版本更新与变化见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能
 
@@ -120,7 +120,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build_tauri.ps1
 交付文件为：
 
 ```text
-src-tauri/target/release/bundle/nsis/PhotoTool_1.0.0_x64-setup.exe
+src-tauri/target/release/bundle/nsis/PhotoTool_1.1.0_x64-setup.exe
 ```
 
 版本号随 `src-tauri/tauri.conf.json` 的 `version` 变化。双击安装后，从开始菜单或安装目录中的 `phototool-desktop.exe` 启动。桌面版和 Python 原生窗口预览均默认全屏打开；按 `F11` 切换全屏，按 `Esc` 返回普通窗口。普通窗口默认 1440 × 920，最小 1100 × 720。

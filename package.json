@@ -1,5 +1,6 @@
 {
   "name": "phototool-desktop",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "web:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\setup_python.ps1",

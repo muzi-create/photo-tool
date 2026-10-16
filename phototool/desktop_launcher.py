@@ -9,6 +9,7 @@ from pathlib import Path
 
 import webview
 
+from phototool import __version__
 from phototool.desktop_server import serve
 
 
@@ -55,7 +56,7 @@ def run_desktop(port: int = 8765) -> int:
     webview.settings["ALLOW_DOWNLOADS"] = True
     controls = _DesktopWindowControls()
     window = webview.create_window(
-        "PhotoTool · 个人图片处理工作台",
+        f"PhotoTool v{__version__} · 个人图片处理工作台",
         f"http://127.0.0.1:{port}/",
         width=DEFAULT_WIDTH,
         height=DEFAULT_HEIGHT,

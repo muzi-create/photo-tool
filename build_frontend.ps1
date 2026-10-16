@@ -5,6 +5,10 @@ if (-not (Test-Path -LiteralPath $projectPython)) { $projectPython = "python" }
 & $projectPython -m phototool.dependencies --profile runtime
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+$applicationVersion = & $projectPython -c "from phototool import __version__; print(__version__)"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$applicationVersion = $applicationVersion.Trim()
+
 & $projectPython -m reflex export --frontend-only --no-zip
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -18,13 +22,13 @@ if (-not (Test-Path -LiteralPath ".web\build\client\index.html")) {
 # Tauri initially loads a local asset while the Python sidecar unpacks.  This
 # page deliberately contains no Reflex client so it cannot try connecting to
 # tauri.localhost before the shell navigates to the ready sidecar.
-@'
+$loadingPage = @'
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PhotoTool Loading</title>
+  <title>PhotoTool v__PHOTOTOOL_VERSION__ Loading</title>
   <style>
     :root { color-scheme: light; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f7fb; color: #1b2942; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
@@ -37,6 +41,7 @@ if (-not (Test-Path -LiteralPath ".web\build\client\index.html")) {
     @keyframes loading { 0% { transform: translateX(-120%); } 55% { transform: translateX(135%); } 100% { transform: translateX(135%); } }
   </style>
 </head>
-<body><main><div class="mark">PT</div><h1>PhotoTool</h1><p>&#27491;&#22312;&#21551;&#21160;&#26412;&#22320;&#22270;&#29255;&#22788;&#29702;&#26381;&#21153;&#8230;</p><div class="progress" role="progressbar" aria-label="Loading"></div></main></body>
+<body><main><div class="mark">PT</div><h1>PhotoTool v__PHOTOTOOL_VERSION__</h1><p>&#27491;&#22312;&#21551;&#21160;&#26412;&#22320;&#22270;&#29255;&#22788;&#29702;&#26381;&#21153;&#8230;</p><div class="progress" role="progressbar" aria-label="Loading"></div></main></body>
 </html>
-'@ | Set-Content -LiteralPath ".web\build\client\loading.html" -Encoding utf8
+'@
+$loadingPage.Replace("__PHOTOTOOL_VERSION__", $applicationVersion) | Set-Content -LiteralPath ".web\build\client\loading.html" -Encoding utf8
